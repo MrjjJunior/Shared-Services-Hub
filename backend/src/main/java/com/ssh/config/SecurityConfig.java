@@ -63,11 +63,16 @@ public class SecurityConfig {
 
             // Configure endpoint access
             .authorizeHttpRequests(auth -> auth
+                // Let container error dispatches reach Boot's error response instead of
+                // being turned into an empty 401 by the security filter chain.
+                .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR).permitAll()
                 // Public endpoints
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/swagger-ui/**").permitAll()
                 .requestMatchers("/swagger-ui.html").permitAll()
                 .requestMatchers("/v3/api-docs/**").permitAll()
+                // The public verification ledger is readable without a token
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/ledger/**").permitAll()
 
                 // Role-restricted endpoints
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
