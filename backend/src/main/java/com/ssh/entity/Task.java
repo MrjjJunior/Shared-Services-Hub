@@ -81,6 +81,15 @@ public class Task {
     private boolean isPaid = true;
 
     /**
+     * Optional minimum youth tier for this task. Stored as TIER_1, TIER_2 or
+     * TIER_3; null means the task is open to every tier. This is advisory in
+     * the first release so existing tasks and matches keep working.
+     */
+    @Size(max = 20)
+    @Column(name = "required_tier", length = 20)
+    private String requiredTier;
+
+    /**
      * The SME's reason for sending the last submission back for revision.
      * Kept until the task is verified so the youth can read it while revising.
      */
@@ -300,6 +309,14 @@ public class Task {
 
     public void setPaid(boolean paid) {
         isPaid = paid;
+    }
+
+    public String getRequiredTier() {
+        return requiredTier;
+    }
+
+    public void setRequiredTier(String requiredTier) {
+        this.requiredTier = requiredTier;
     }
 
     public String getRevisionReason() {

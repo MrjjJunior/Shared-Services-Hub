@@ -1,7 +1,9 @@
 <script>
 	import './layout.css';
 	import Navbar from '$lib/components/Navbar.svelte';
+	import { browser } from '$app/environment';
 	import { auth } from '$lib/stores/auth.js';
+	import { demoMode, lowDataMode, toggleLowDataMode } from '$lib/stores/preferences.js';
 	import { toast } from '$lib/stores/toast.js';
 	import { onMount } from 'svelte';
 
@@ -9,14 +11,45 @@
 
 	onMount(() => {
 		auth.init();
+
+		// Install the lightweight PWA shell only in production builds.
+		if (browser && import.meta.env.PROD && 'serviceWorker' in navigator) {
+			navigator.serviceWorker.register('/sw.js').catch((err) => {
+				console.warn('[PWA] Service worker registration skipped:', err);
+			});
+		}
 	});
+
+	function exitDemo() {
+		demoMode.set(false);
+		auth.logout();
+	}
 
 	const toasts = $derived($toast);
 </script>
 
+<svelte:body class:low-data={$lowDataMode} />
+
 <div class="flex min-h-screen flex-col bg-[#F8F9FC]">
 	<!-- Navbar -->
 	<Navbar />
+
+	{#if $demoMode}
+		<div class="border-b border-[#8A5A10] bg-[#D4831A] text-white">
+			<div class="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+				<div class="flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-widest">
+					<span class="h-1.5 w-1.5 bg-white"></span>
+					Demo mode · sample data only
+				</div>
+				<div class="flex items-center gap-4 font-mono text-[10px] font-bold uppercase tracking-wider">
+					<a href="/demo" class="hover:underline">Switch role</a>
+					<button type="button" class="border border-white/40 px-2.5 py-1 hover:bg-white hover:text-[#8A5A10] transition-colors" onclick={exitDemo}>
+						Exit demo
+					</button>
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	<!-- Main Content Area -->
 	<main class="flex-1">
@@ -91,9 +124,12 @@
 					<h4 class="font-mono text-xs font-bold uppercase tracking-widest text-[#D4831A] mb-4">Platform</h4>
 					<ul class="space-y-2.5 text-sm text-[#C8D4E8]">
 						<li><a href="/tasks" class="hover:text-white hover:underline transition-colors">Task Directory</a></li>
+						<li><a href="/ledger" class="hover:text-white hover:underline transition-colors">Public Experience Ledger</a></li>
+						<li><a href="/dashboard/corporate" class="hover:text-white hover:underline transition-colors">Funder Impact</a></li>
 						<li><a href="/register" class="hover:text-white hover:underline transition-colors">Candidate Registration</a></li>
 						<li><a href="/register" class="hover:text-white hover:underline transition-colors">SME Partner Access</a></li>
 						<li><a href="/register" class="hover:text-white hover:underline transition-colors">Corporate Sponsorship</a></li>
+						<li><a href="/demo" class="hover:text-white hover:underline transition-colors">Interactive Demo</a></li>
 					</ul>
 				</div>
 
@@ -118,7 +154,12 @@
 
 			<div class="border-t border-[#1C3565] pt-8 flex flex-col sm:flex-row items-center justify-between text-xs font-mono text-[#6A84AC] gap-4">
 				<p>© 2026 Shared Services Hub (Pty) Ltd. Republic of South Africa.</p>
-				<p>Palette: Cape Cobalt | Typography: DM Serif &amp; Inter</p>
+				<div class="flex items-center gap-4">
+					<button type="button" class="hover:text-white transition-colors" onclick={toggleLowDataMode} aria-pressed={$lowDataMode}>
+						Low-data: {$lowDataMode ? 'ON' : 'OFF'}
+					</button>
+					<p>Palette: Cape Cobalt | Typography: DM Serif &amp; Inter</p>
+				</div>
 			</div>
 		</div>
 	</footer>

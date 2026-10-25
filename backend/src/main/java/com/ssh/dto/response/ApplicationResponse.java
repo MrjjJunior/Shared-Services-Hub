@@ -14,10 +14,32 @@ public record ApplicationResponse(
     String coverNote,
     LocalDateTime appliedAt,
     LocalDateTime expiresAt,
-    LocalDateTime decidedAt
+    LocalDateTime decidedAt,
+    String youthTier,
+    Long youthVerifiedExperienceCount,
+    Double youthAverageRating,
+    String youthSkills,
+    String youthEducation,
+    String youthLocation,
+    String youthAvailability,
+    String youthBio,
+    String youthPortfolio
 ) {
 
     public static ApplicationResponse from(Application application) {
+        return from(application, null, null, null, null, null, null, null, null, null);
+    }
+
+    public static ApplicationResponse from(Application application,
+                                           String youthTier,
+                                           Long youthVerifiedExperienceCount,
+                                           Double youthAverageRating,
+                                           String youthSkills,
+                                           String youthEducation,
+                                           String youthLocation,
+                                           String youthAvailability,
+                                           String youthBio,
+                                           String youthPortfolio) {
         return new ApplicationResponse(
             application.getId(),
             application.getTask() != null ? application.getTask().getId() : null,
@@ -28,7 +50,16 @@ public record ApplicationResponse(
             application.getCoverNote(),
             application.getCreatedAt(),
             application.getExpiresAt(),
-            application.getDecidedAt()
+            application.getDecidedAt(),
+            youthTier,
+            youthVerifiedExperienceCount,
+            youthAverageRating,
+            youthSkills,
+            youthEducation,
+            youthLocation,
+            youthAvailability,
+            youthBio,
+            youthPortfolio
         );
     }
 }

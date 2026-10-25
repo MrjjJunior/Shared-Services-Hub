@@ -67,6 +67,28 @@ public class RegisterRequest {
     private String industry;
 
     // ============================================
+    // YOUTH-SPECIFIC FIELDS (nullable)
+    // ============================================
+
+    @Size(max = 255)
+    private String education;
+
+    @Size(max = 500)
+    private String skills;
+
+    @Size(max = 255)
+    private String portfolio;
+
+    @Size(max = 1000)
+    private String bio;
+
+    @Size(max = 100)
+    private String location;
+
+    @Size(max = 50)
+    private String availability;
+
+    // ============================================
     // CONSTRUCTORS
     // ============================================
 
@@ -137,6 +159,54 @@ public class RegisterRequest {
 
     public void setIndustry(String industry) {
         this.industry = industry;
+    }
+
+    public String getEducation() {
+        return education;
+    }
+
+    public void setEducation(String education) {
+        this.education = education;
+    }
+
+    public String getSkills() {
+        return skills;
+    }
+
+    public void setSkills(String skills) {
+        this.skills = skills;
+    }
+
+    public String getPortfolio() {
+        return portfolio;
+    }
+
+    public void setPortfolio(String portfolio) {
+        this.portfolio = portfolio;
+    }
+
+    public String getBio() {
+        return bio;
+    }
+
+    public void setBio(String bio) {
+        this.bio = bio;
+    }
+
+    public String getLocation() {
+        return location;
+    }
+
+    public void setLocation(String location) {
+        this.location = location;
+    }
+
+    public String getAvailability() {
+        return availability;
+    }
+
+    public void setAvailability(String availability) {
+        this.availability = availability;
     }
 
     // ============================================

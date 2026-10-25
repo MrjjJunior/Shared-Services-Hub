@@ -88,7 +88,14 @@ public class AuthService {
         // 3. Create the role-specific profile entity
         switch (request.getRole().toUpperCase()) {
             case "YOUTH":
-                youthRepository.save(new Youth(user));
+                Youth youth = new Youth(user);
+                youth.setEducation(request.getEducation());
+                youth.setSkills(request.getSkills());
+                youth.setPortfolio(request.getPortfolio());
+                youth.setBio(request.getBio());
+                youth.setLocation(request.getLocation());
+                youth.setAvailability(request.getAvailability());
+                youthRepository.save(youth);
                 break;
             case "SME":
                 SME sme = new SME(user, request.getBusinessName());

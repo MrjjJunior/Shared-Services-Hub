@@ -79,6 +79,7 @@ public class TaskService {
         task.setBudget(request.getBudget());
         task.setDurationDays(request.getDurationDays());
         task.setPaid(request.isPaid());
+        task.setRequiredTier(normalizeRequiredTier(request.getRequiredTier()));
 
         return toTaskResponse(taskRepository.save(task));
     }
@@ -280,6 +281,15 @@ public class TaskService {
         }
     }
 
+    private static String normalizeRequiredTier(String requiredTier) {
+        if (requiredTier == null || requiredTier.isBlank()
+                || "ALL".equalsIgnoreCase(requiredTier)) {
+            return null;
+        }
+        String normalized = requiredTier.trim().toUpperCase();
+        return normalized.matches("TIER_[0-3]") ? normalized : null;
+    }
+
     public TaskResponse toTaskResponse(Task task) {
         TaskResponse response = new TaskResponse(
             task.getId(),
@@ -292,6 +302,7 @@ public class TaskService {
         response.setBudget(task.getBudget());
         response.setDurationDays(task.getDurationDays());
         response.setPaid(task.isPaid());
+        response.setRequiredTier(task.getRequiredTier());
         response.setRevisionReason(task.getRevisionReason());
         response.setRevisionCount(task.getRevisionCount());
         response.setCreatedAt(task.getCreatedAt());

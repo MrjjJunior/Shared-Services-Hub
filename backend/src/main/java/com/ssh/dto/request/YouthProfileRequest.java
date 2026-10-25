@@ -3,38 +3,21 @@ package com.ssh.dto.request;
 import jakarta.validation.constraints.Size;
 
 /**
- * Youth Profile Request DTO
- *
- * Purpose: Carries youth profile updates from the frontend to the backend.
- *
- * WHY SSH needs this DTO:
- *   - Only exposes fields the youth should edit
- *   - Validates input before updating the Youth entity
- *   - Prevents clients from changing isAlumni or user relationships
- *
- * TODO: Add date of birth field with age validation (must be 18-34)
- * TODO: Add list of preferred job categories
- * TODO: Add availability calendar
- *
- * TDD: Write YouthProfileRequestTest first
- *       - shouldHaveNoViolations_ForValidRequest()
- *       - shouldFailValidation_WhenEducationTooLong()
- *       - shouldFailValidation_WhenBioTooLong()
- *       - shouldFailValidation_WhenLocationTooLong()
- *
- * @author SSH Team
- * @version 1.0
- * @since 2026
+ * Editable youth profile fields. Every field is optional so the same payload
+ * can be used by the dashboard and the skills-check onboarding step.
  */
 public class YouthProfileRequest {
 
     @Size(max = 255)
     private String education;
 
+    @Size(max = 500)
     private String skills;
 
+    @Size(max = 255)
     private String portfolio;
 
+    @Size(max = 1000)
     private String bio;
 
     @Size(max = 100)
@@ -43,20 +26,13 @@ public class YouthProfileRequest {
     @Size(max = 50)
     private String availability;
 
-    // ============================================
-    // CONSTRUCTORS
-    // ============================================
-
-    public YouthProfileRequest() {}
+    public YouthProfileRequest() {
+    }
 
     public YouthProfileRequest(String education, String location) {
         this.education = education;
         this.location = location;
     }
-
-    // ============================================
-    // GETTERS AND SETTERS
-    // ============================================
 
     public String getEducation() {
         return education;
@@ -106,14 +82,13 @@ public class YouthProfileRequest {
         this.availability = availability;
     }
 
-    // ============================================
-    // TO STRING
-    // ============================================
-
     @Override
     public String toString() {
         return "YouthProfileRequest{" +
             "education='" + education + '\'' +
+            ", skills='" + skills + '\'' +
+            ", portfolio='" + portfolio + '\'' +
+            ", bio='" + bio + '\'' +
             ", location='" + location + '\'' +
             ", availability='" + availability + '\'' +
             '}';

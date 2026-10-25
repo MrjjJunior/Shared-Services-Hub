@@ -1,5 +1,6 @@
 <script>
 	import { auth, isAuthenticated, currentUser, getRoleDashboard } from '$lib/stores/auth.js';
+	import { demoMode, lowDataMode, toggleLowDataMode } from '$lib/stores/preferences.js';
 	import { formatRole } from '$lib/utils/formatters.js';
 	import { page } from '$app/state';
 
@@ -26,6 +27,30 @@
 </script>
 
 <header class="sticky top-0 z-40 w-full border-b border-[#C8D4E8] bg-[#FFFFFF]/95 backdrop-blur-xs">
+	<!-- Public utility strip: ledger, impact, demo and low-data access -->
+	<div class="hidden md:block bg-[#0A1E4A] border-b border-[#1C3565]">
+		<div class="mx-auto flex h-7 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8 font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-[#C8D4E8]">
+			<div class="flex items-center gap-5">
+				<a href="/ledger" class="hover:text-white transition-colors {activePath.startsWith('/ledger') ? 'text-[#D4831A]' : ''}">
+					Public Ledger
+				</a>
+				<a href="/dashboard/corporate" class="hover:text-white transition-colors">Funder Impact</a>
+				<a href="/demo" class="hover:text-white transition-colors {activePath.startsWith('/demo') ? 'text-[#D4831A]' : ''}">
+					{ $demoMode ? '● Demo Active' : 'Demo Mode' }
+				</a>
+			</div>
+			<button
+				type="button"
+				class="hover:text-white transition-colors flex items-center gap-2"
+				onclick={toggleLowDataMode}
+				aria-pressed={$lowDataMode}
+			>
+				<span class="h-1.5 w-1.5 {$lowDataMode ? 'bg-[#1A8A55]' : 'bg-[#6A84AC]'}"></span>
+				Low Data: {$lowDataMode ? 'On' : 'Off'}
+			</button>
+		</div>
+	</div>
+
 	<div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
 		<!-- Brand / Logo -->
 		<div class="flex items-center gap-3">
@@ -159,6 +184,27 @@
 				>
 					Task Directory
 				</a>
+				<a
+					href="/ledger"
+					class="block px-3 py-2 text-sm font-medium {activePath.startsWith('/ledger') ? 'bg-[#EFF4FF] text-[#1446A0] font-bold' : 'text-[#0D1B3E] hover:bg-[#F8F9FC]'}"
+					onclick={closeMobileMenu}
+				>
+					Public Ledger
+				</a>
+				<a
+					href="/dashboard/corporate"
+					class="block px-3 py-2 text-sm font-medium text-[#0D1B3E] hover:bg-[#F8F9FC]"
+					onclick={closeMobileMenu}
+				>
+					Funder Impact
+				</a>
+				<a
+					href="/demo"
+					class="block px-3 py-2 text-sm font-medium {activePath.startsWith('/demo') ? 'bg-[#EFF4FF] text-[#1446A0] font-bold' : 'text-[#0D1B3E] hover:bg-[#F8F9FC]'}"
+					onclick={closeMobileMenu}
+				>
+					Demo Mode
+				</a>
 				{#if loggedIn}
 					<a
 						href={dashboardUrl}
@@ -169,6 +215,16 @@
 					</a>
 				{/if}
 			</nav>
+
+			<button
+				type="button"
+				class="flex w-full items-center justify-between border border-[#C8D4E8] bg-[#F8F9FC] px-3 py-2.5 text-left font-mono text-[10px] font-bold uppercase tracking-wider text-[#465A7A]"
+				onclick={toggleLowDataMode}
+				aria-pressed={$lowDataMode}
+			>
+				<span>Low-data PWA mode</span>
+				<span class={$lowDataMode ? 'text-[#1A8A55]' : 'text-[#6A84AC]'}>{$lowDataMode ? 'ON' : 'OFF'}</span>
+			</button>
 
 			<div class="pt-3 border-t border-[#C8D4E8]">
 				{#if loggedIn && user}

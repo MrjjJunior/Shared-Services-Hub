@@ -1,4 +1,5 @@
 <script>
+	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
 	import { auth } from '$lib/stores/auth.js';
 	import { toast } from '$lib/stores/toast.js';
@@ -14,10 +15,49 @@
 	let registrationNumber = $state('');
 	let industry = $state('Retail & E-commerce');
 
+	// Youth-only fields
+	let youthEducation = $state('');
+	let youthSkills = $state('');
+	let youthPortfolio = $state('');
+	let youthBio = $state('');
+	let youthLocation = $state('');
+	let youthAvailability = $state('Immediate');
+
 	let loading = $state(false);
 	let errorMessage = $state(null);
 
 	const isSme = $derived(role === 'SME');
+	const isYouth = $derived(role === 'YOUTH');
+
+	const suggestedSkills = [
+		'Excel',
+		'Data Entry',
+		'Customer Support',
+		'Bookkeeping',
+		'Canva',
+		'Copywriting',
+		'Social Media',
+		'Product Photography',
+		'Figma',
+		'Web Design',
+		'JavaScript',
+		'SEO'
+	];
+
+	function selectedSkills() {
+		return youthSkills
+			.split(',')
+			.map((skill) => skill.trim())
+			.filter(Boolean);
+	}
+
+	function toggleSkill(skill) {
+		const current = selectedSkills();
+		const next = current.includes(skill)
+			? current.filter((item) => item !== skill)
+			: [...current, skill];
+		youthSkills = next.join(', ');
+	}
 
 	async function handleSubmit(event) {
 		event?.preventDefault();
@@ -54,13 +94,29 @@
 						registrationNumber: registrationNumber.trim(),
 						industry: industry.trim()
 					}
+				: {}),
+			...(isYouth
+				? {
+						education: youthEducation.trim(),
+						skills: youthSkills.trim(),
+						portfolio: youthPortfolio.trim(),
+						bio: youthBio.trim(),
+						location: youthLocation.trim(),
+						availability: youthAvailability.trim()
+					}
 				: {})
 		};
 
 		try {
 			const res = await api.auth.register(payload);
-			toast.success('Registration successful! Welcome to the hub.');
-			auth.login(res, true);
+			if (isYouth) {
+				toast.success('Account created. Let’s run your skills check.');
+				auth.login(res, false);
+				await goto('/onboarding/skills');
+			} else {
+				toast.success('Registration successful! Welcome to the hub.');
+				auth.login(res, true);
+			}
 		} catch (err) {
 			errorMessage = err.message || 'Registration failed. Please check your information.';
 		} finally {
@@ -186,6 +242,125 @@
 						/>
 					</div>
 				</div>
+
+				<!-- Conditionally Rendered Youth Fields -->
+				{#if isYouth}
+					<div class="border-2 border-[#1446A0] bg-[#F5F8FF] p-5 space-y-4">
+						<div>
+							<div class="font-mono text-xs font-bold uppercase tracking-wider text-[#1446A0]">
+								[ Youth Profile Head Start ]
+							</div>
+							<p class="mt-1 text-[11px] leading-relaxed text-[#465A7A] font-sans">
+								Optional but recommended. Your skills and availability power the reserved task feed. You can refine everything in your profile later.
+							</p>
+						</div>
+
+						<div>
+							<label for="youthSkills" class="block text-xs font-mono font-bold text-[#0D1B3E]">
+								Skills
+							</label>
+							<input
+								id="youthSkills"
+								type="text"
+								maxlength="500"
+								bind:value={youthSkills}
+								placeholder="e.g. Excel, Customer Support, Canva"
+								class="cape-input mt-1 block w-full px-3 py-2 text-sm"
+							/>
+							<div class="mt-2 flex flex-wrap gap-1.5">
+								{#each suggestedSkills as skill}
+									<button
+										type="button"
+										class="border px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-wider transition-colors {selectedSkills().includes(skill) ? 'border-[#1446A0] bg-[#1446A0] text-white' : 'border-[#C8D4E8] bg-white text-[#465A7A] hover:border-[#1446A0]'}"
+										onclick={() => toggleSkill(skill)}
+									>
+										{selectedSkills().includes(skill) ? '✓ ' : '+ '}{skill}
+									</button>
+								{/each}
+							</div>
+						</div>
+
+						<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+							<div>
+								<label for="youthEducation" class="block text-xs font-mono font-bold text-[#0D1B3E]">
+									Education
+								</label>
+								<input
+									id="youthEducation"
+									type="text"
+									maxlength="255"
+									bind:value={youthEducation}
+									placeholder="e.g. BCom Accounting, CPUT"
+									class="cape-input mt-1 block w-full px-3 py-2 text-sm"
+								/>
+							</div>
+
+							<div>
+								<label for="youthLocation" class="block text-xs font-mono font-bold text-[#0D1B3E]">
+									Location
+								</label>
+								<input
+									id="youthLocation"
+									type="text"
+									maxlength="100"
+									bind:value={youthLocation}
+									placeholder="e.g. Cape Town, Western Cape"
+									class="cape-input mt-1 block w-full px-3 py-2 text-sm"
+								/>
+							</div>
+
+							<div>
+								<label for="youthAvailability" class="block text-xs font-mono font-bold text-[#0D1B3E]">
+									Availability
+								</label>
+								<select
+									id="youthAvailability"
+									bind:value={youthAvailability}
+									class="cape-input mt-1 block w-full px-3 py-2 text-sm"
+								>
+									<option value="Immediate">Immediate</option>
+									<option value="Weekdays">Weekdays</option>
+									<option value="Weekdays after 2pm">Weekdays after 2pm</option>
+									<option value="Weekends">Weekends</option>
+									<option value="Evenings">Evenings</option>
+									<option value="Flexible">Flexible</option>
+								</select>
+							</div>
+
+							<div>
+								<label for="youthPortfolio" class="block text-xs font-mono font-bold text-[#0D1B3E]">
+									Portfolio URL
+								</label>
+								<input
+									id="youthPortfolio"
+									type="url"
+									maxlength="255"
+									bind:value={youthPortfolio}
+									placeholder="https://..."
+									class="cape-input mt-1 block w-full px-3 py-2 text-sm"
+								/>
+							</div>
+						</div>
+
+						<div>
+							<label for="youthBio" class="block text-xs font-mono font-bold text-[#0D1B3E]">
+								Short Bio
+							</label>
+							<textarea
+								id="youthBio"
+								rows="2"
+								maxlength="1000"
+								bind:value={youthBio}
+								placeholder="What kind of work are you ready for?"
+								class="cape-input mt-1 block w-full px-3 py-2 text-sm font-sans"
+							></textarea>
+						</div>
+
+						<div class="border border-[#C8D4E8] bg-white px-3 py-2 font-mono text-[9px] uppercase tracking-wider text-[#6A84AC]">
+							Next: a three-step skills check to unlock your match reasons.
+						</div>
+					</div>
+				{/if}
 
 				<!-- Conditionally Rendered SME Fields -->
 				{#if isSme}

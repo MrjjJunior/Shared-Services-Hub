@@ -46,6 +46,8 @@ public class TaskResponse {
 
     private boolean isPaid;
 
+    private String requiredTier;
+
     private Long smeId;
 
     private String smeBusinessName;
@@ -142,6 +144,14 @@ public class TaskResponse {
     @JsonProperty("isPaid")
     public void setPaid(boolean paid) {
         isPaid = paid;
+    }
+
+    public String getRequiredTier() {
+        return requiredTier;
+    }
+
+    public void setRequiredTier(String requiredTier) {
+        this.requiredTier = requiredTier;
     }
 
     public Long getSmeId() {

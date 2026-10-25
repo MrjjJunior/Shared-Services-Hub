@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
@@ -54,6 +55,17 @@ public class TaskRequest {
     private Integer durationDays;
 
     private boolean isPaid = true;
+
+    /**
+     * Optional minimum youth tier. ALL/null means open to every tier.
+     * The task remains visible to everyone; the value is shown as guidance.
+     */
+    @Size(max = 20)
+    @Pattern(
+        regexp = "ALL|TIER_[0-3]",
+        message = "Required tier must be ALL, TIER_0, TIER_1, TIER_2 or TIER_3"
+    )
+    private String requiredTier;
 
     // ============================================
     // CONSTRUCTORS
@@ -120,6 +132,14 @@ public class TaskRequest {
     @JsonAlias("paid")
     public void setPaid(boolean paid) {
         isPaid = paid;
+    }
+
+    public String getRequiredTier() {
+        return requiredTier;
+    }
+
+    public void setRequiredTier(String requiredTier) {
+        this.requiredTier = requiredTier;
     }
 
     // ============================================

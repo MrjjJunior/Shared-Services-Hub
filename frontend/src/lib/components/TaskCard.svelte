@@ -1,6 +1,6 @@
 <script>
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
-	import { formatCurrency, formatDuration } from '$lib/utils/formatters.js';
+	import { formatCurrency, formatDuration, formatTier } from '$lib/utils/formatters.js';
 
 	/**
 	 * @typedef {Object} Task
@@ -12,6 +12,7 @@
 	 * @property {number} [budget]
 	 * @property {number} [durationDays]
 	 * @property {boolean} [isPaid]
+	 * @property {string} [requiredTier]
 	 * @property {number} [smeId]
 	 * @property {string} [smeBusinessName]
 	 * @property {number} [assignedToId]
@@ -23,11 +24,12 @@
 	 * @typedef {Object} Props
 	 * @property {Task} task
 	 * @property {boolean} [showActions]
+	 * @property {string} [whyMatch]
 	 * @property {import('svelte').Snippet} [actions]
 	 */
 
 	/** @type {Props} */
-	let { task, showActions = false, actions } = $props();
+	let { task, showActions = false, whyMatch = '', actions } = $props();
 </script>
 
 <div
@@ -36,11 +38,18 @@
 	<div>
 		<!-- Top Metadata Row -->
 		<div class="flex items-center justify-between gap-3 mb-3">
-			<span
-				class="inline-block bg-[#EFF4FF] border border-[#C8D4E8] px-2 py-0.5 text-[11px] font-mono font-semibold text-[#1446A0] uppercase tracking-wider"
-			>
-				{task.category || 'General'}
-			</span>
+			<div class="flex items-center gap-2 flex-wrap">
+				<span
+					class="inline-block bg-[#EFF4FF] border border-[#C8D4E8] px-2 py-0.5 text-[11px] font-mono font-semibold text-[#1446A0] uppercase tracking-wider"
+				>
+					{task.category || 'General'}
+				</span>
+				{#if task.requiredTier}
+					<span class="inline-block border border-[#7C3FE4]/40 bg-[#F5EEFF] px-2 py-0.5 text-[10px] font-mono font-bold text-[#7C3FE4] uppercase tracking-wider">
+						{formatTier(task.requiredTier, true)}
+					</span>
+				{/if}
+			</div>
 			<StatusBadge status={task.status} size="sm" />
 		</div>
 
@@ -57,6 +66,13 @@
 			<p class="mt-2.5 text-sm text-[#465A7A] line-clamp-2 leading-relaxed">
 				{task.description}
 			</p>
+		{/if}
+
+		{#if whyMatch}
+			<div class="mt-3 border-l-2 border-l-[#D4831A] border-y border-r border-[#F0DDBB] bg-[#FFFBF2] px-3 py-2">
+				<div class="font-mono text-[9px] font-bold uppercase tracking-widest text-[#8A5A10]">Why this match</div>
+				<p class="mt-0.5 text-[11px] leading-relaxed text-[#465A7A] font-sans">{whyMatch}</p>
+			</div>
 		{/if}
 
 		<!-- SME Business Name -->

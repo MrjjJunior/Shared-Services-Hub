@@ -1,0 +1,19 @@
+{
+	"name": "Shared Services Hub",
+	"short_name": "SSH",
+	"description": "Verified, corporate-funded work experience for South African youth and SMEs.",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"orientation": "portrait-primary",
+	"background_color": "#F8F9FC",
+	"theme_color": "#0A1E4A",
+	"icons": [
+		{
+			"src": "/icon.svg",
+			"sizes": "any",
+			"type": "image/svg+xml",
+			"purpose": "any maskable"
+		}
+	]
+}

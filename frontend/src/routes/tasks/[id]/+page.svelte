@@ -4,10 +4,17 @@
 	import StarRating from '$lib/components/StarRating.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ApiError from '$lib/components/ApiError.svelte';
+	import ApplicantReview from '$lib/components/ApplicantReview.svelte';
 	import { api } from '$lib/api.js';
 	import { currentUser } from '$lib/stores/auth.js';
 	import { toast } from '$lib/stores/toast.js';
-	import { formatCurrency, formatDuration, formatDate } from '$lib/utils/formatters.js';
+	import {
+		formatCurrency,
+		formatDuration,
+		formatDate,
+		formatTier,
+		tierIndex
+	} from '$lib/utils/formatters.js';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 
@@ -24,6 +31,7 @@
 	let youthIdToAssign = $state('');
 	let applicants = $state([]);
 	let loadingApplicants = $state(false);
+	let applicantError = $state(null);
 	let verifyModalOpen = $state(false);
 	let verifyRating = $state(5);
 	let verifyFeedback = $state('');
@@ -33,12 +41,43 @@
 
 	// The logged-in youth's application for this task (if any)
 	let myApplication = $state(null);
+	let youthProfile = $state(null);
+	let youthTier = $state(null);
 
 	const isYouth = $derived(user?.role === 'YOUTH');
 	const isSme = $derived(user?.role === 'SME');
 	const isAssignedToMe = $derived(
 		isYouth && myApplication?.status === 'ACCEPTED'
 	);
+
+	const matchSkills = $derived.by(() => {
+		const haystack = `${task?.title || ''} ${task?.category || ''} ${task?.description || ''}`.toLowerCase();
+		return (youthProfile?.skills || '')
+			.split(',')
+			.map((skill) => skill.trim())
+			.filter(Boolean)
+			.filter((skill) => {
+				const lower = skill.toLowerCase();
+				const words = lower.split(/\s+/).filter((word) => word.length > 3);
+				return haystack.includes(lower) || words.some((word) => haystack.includes(word));
+			});
+	});
+
+	const tierMatch = $derived.by(() => {
+		if (!task?.requiredTier || task.requiredTier === 'ALL') {
+			return { ok: true, label: 'Open to every tier', detail: 'This brief has no tier preference.' };
+		}
+		const current = tierIndex(youthTier?.tier || 'TIER_0');
+		const preferred = tierIndex(task.requiredTier);
+		return {
+			ok: current >= preferred,
+			label: current >= preferred ? 'Tier preference met' : 'Stretch opportunity',
+			detail:
+				current >= preferred
+					? `You meet the preferred ${formatTier(task.requiredTier, true)} level.`
+					: `The SME prefers ${formatTier(task.requiredTier, true)}. You can still apply and be ranked on fit.`
+		};
+	});
 
 	async function loadTask() {
 		loading = true;
@@ -54,21 +93,39 @@
 		}
 	}
 
-	async function loadMyApplication() {
+	async function loadYouthContext() {
 		if (!task) return;
-		try {
-			const apps = await api.applications.mine();
+		const [appsResult, profileResult, tierResult] = await Promise.allSettled([
+			api.applications.mine(),
+			api.youth.me(),
+			api.tiers.me()
+		]);
+
+		if (appsResult.status === 'fulfilled') {
+			const apps = appsResult.value || [];
 			myApplication =
-				(apps || []).find((a) => Number(a.taskId) === Number(task.id)) || null;
-		} catch (appErr) {
-			console.warn('Could not load my application:', appErr);
+				apps.find((a) => Number(a.taskId) === Number(task.id)) || null;
+		} else {
+			console.warn('Could not load my application:', appsResult.reason);
+		}
+
+		if (profileResult.status === 'fulfilled') {
+			youthProfile = profileResult.value;
+		} else {
+			console.warn('Could not load youth profile:', profileResult.reason);
+		}
+
+		if (tierResult.status === 'fulfilled') {
+			youthTier = tierResult.value;
+		} else {
+			console.warn('Could not load youth tier:', tierResult.reason);
 		}
 	}
 
 	// Wait for auth hydration so the youth-only application lookup has a role.
 	$effect(() => {
 		if (isYouth && task) {
-			loadMyApplication();
+			loadYouthContext();
 		}
 	});
 
@@ -119,28 +176,31 @@
 		if (!task) return;
 		assignModalOpen = true;
 		loadingApplicants = true;
+		applicantError = null;
 		applicants = [];
 		youthIdToAssign = '';
 		try {
 			const res = await api.applications.forTask(task.id);
 			applicants = (res || []).filter((a) => a.status === 'PENDING');
-			if (applicants.length > 0) {
-				youthIdToAssign = String(applicants[0].youthId);
-			}
 		} catch (err) {
-			toast.error(err.message || 'Failed to load applicants.');
+			applicantError = err.message || 'Failed to load applicants.';
+			toast.error(applicantError);
 		} finally {
 			loadingApplicants = false;
 		}
 	}
 
-	async function handleAssignSubmit() {
-		if (!task || !youthIdToAssign) return;
+	async function handleAssignSubmit(youthId = youthIdToAssign) {
+		const targetYouthId = String(youthId || youthIdToAssign || '');
+		if (!task || !targetYouthId) return;
 		actionLoading = true;
 		try {
-			const res = await api.tasks.assign(task.id, youthIdToAssign);
+			const res = await api.tasks.assign(task.id, targetYouthId);
 			task = res;
-			toast.success('Task assigned to the selected applicant!');
+			const chosen = applicants.find((a) => String(a.youthId) === targetYouthId);
+			toast.success(
+				`Task assigned to ${chosen?.youthName || `Youth #${targetYouthId}`}!`
+			);
 			assignModalOpen = false;
 		} catch (err) {
 			toast.error(err.message || 'Failed to assign task.');
@@ -158,12 +218,16 @@
 
 	async function handleVerifySubmit() {
 		if (!task) return;
-		if (!verifyFeedback.trim()) {
-			toast.error('Written feedback is required.');
+		if (!Number(verifyRating)) {
+			toast.error('Choose a performance rating before signing off.');
 			return;
 		}
-		if (!verifyReference.trim()) {
-			toast.error('A reference to the work you checked is required.');
+		if (verifyFeedback.trim().length < 20) {
+			toast.error('Please write at least 20 characters of specific feedback.');
+			return;
+		}
+		if (verifyReference.trim().length < 5) {
+			toast.error('A clear reference to the work you checked is required.');
 			return;
 		}
 		actionLoading = true;
@@ -243,11 +307,18 @@
 				<div class="border border-[#C8D4E8] bg-white p-8 shadow-xs border-t-4 border-t-[#1446A0]">
 					<!-- Top Meta -->
 					<div class="flex items-center justify-between gap-4 mb-4 flex-wrap">
-						<div class="flex items-center gap-2">
+						<div class="flex flex-wrap items-center gap-2">
 							<span class="bg-[#EFF4FF] border border-[#C8D4E8] px-2.5 py-0.5 text-xs font-mono font-bold text-[#1446A0]">
 								{task.category}
 							</span>
 							<StatusBadge status={task.status} size="md" />
+							{#if task.requiredTier}
+								<span class="border border-[#7C3FE4]/40 bg-[#F5EEFF] px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider text-[#7C3FE4]">
+									{task.requiredTier === 'ALL'
+										? 'All tiers welcome'
+										: `Preferred ${formatTier(task.requiredTier, true)}`}
+								</span>
+							{/if}
 						</div>
 
 						<span class="font-mono text-xs text-[#6A84AC]">
@@ -300,6 +371,71 @@
 							<span class="font-mono text-[10px] text-[#6A84AC] uppercase">Escrow Locked</span>
 						</div>
 					</div>
+
+					<!-- Why this match (youth context) -->
+					{#if isYouth && task.status === 'OPEN'}
+						<div class="mt-6 border border-[#7C3FE4]/30 bg-[#FAF8FF] p-5">
+							<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+								<div>
+									<div class="font-mono text-[10px] font-bold uppercase tracking-widest text-[#7C3FE4]">
+										Why this match
+									</div>
+									<h3 class="mt-1 font-serif text-xl text-[#0D1B3E]">Your profile signals</h3>
+								</div>
+								<span class="self-start border border-[#7C3FE4]/40 bg-white px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-wider text-[#7C3FE4]">
+									{matchSkills.length > 0 || tierMatch.ok ? 'Matched for you' : 'Open application'}
+								</span>
+							</div>
+
+							<div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+								<div class="border border-[#C8D4E8] bg-white p-3">
+									<div class="font-mono text-[9px] font-bold uppercase tracking-wider text-[#6A84AC]">Skill overlap</div>
+									{#if matchSkills.length > 0}
+										<div class="mt-1.5 flex flex-wrap gap-1">
+											{#each matchSkills.slice(0, 4) as skill}
+												<span class="border border-[#1A8A55]/30 bg-[#EDFBF3] px-1.5 py-0.5 font-mono text-[9px] text-[#1A8A55]">{skill}</span>
+											{/each}
+										</div>
+									{:else}
+										<p class="mt-1.5 text-[11px] leading-relaxed text-[#465A7A] font-sans">
+											No direct skill overlap yet. You can still apply; the SME sees your profile.
+										</p>
+									{/if}
+								</div>
+
+								<div class="border border-[#C8D4E8] bg-white p-3">
+									<div class="font-mono text-[9px] font-bold uppercase tracking-wider text-[#6A84AC]">Tier fit</div>
+									<div class="mt-1 font-mono text-[10px] font-bold uppercase tracking-wider {tierMatch.ok ? 'text-[#1A8A55]' : 'text-[#D4831A]'}">
+										{tierMatch.label}
+									</div>
+									<p class="mt-1 text-[11px] leading-relaxed text-[#465A7A] font-sans">{tierMatch.detail}</p>
+									<p class="mt-1 font-mono text-[9px] uppercase tracking-wider text-[#6A84AC]">
+										Your level: {formatTier(youthTier?.tier || 'TIER_0')}
+									</p>
+								</div>
+
+								<div class="border border-[#C8D4E8] bg-white p-3">
+									<div class="font-mono text-[9px] font-bold uppercase tracking-wider text-[#6A84AC]">Logistics</div>
+									<div class="mt-1.5 space-y-1 font-sans text-[11px] text-[#465A7A]">
+										<p>{youthProfile?.location || 'Add your location'}</p>
+										<p>{youthProfile?.availability || 'Add your availability'}</p>
+										<p class="font-mono text-[9px] uppercase tracking-wider text-[#1A8A55]">
+											{task.isPaid ? 'Guaranteed wage' : 'Volunteer experience'}
+										</p>
+									</div>
+								</div>
+							</div>
+
+							<div class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#C8D4E8] pt-3">
+								<p class="text-[10px] leading-relaxed text-[#6A84AC] font-sans">
+									Match reasons are advisory. Applying never requires a minimum tier.
+								</p>
+								<a href="/dashboard/youth" class="font-mono text-[9px] font-bold uppercase tracking-wider text-[#1446A0] hover:underline">
+									Refine your profile →
+								</a>
+							</div>
+						</div>
+					{/if}
 
 					<!-- Task Description Body -->
 					<div class="mt-8">
@@ -429,43 +565,29 @@
 	</div>
 </RoleGuard>
 
-<!-- Modal: Assign Task to Youth (Sharp) -->
+<!-- Modal: Review Applicants and Assign (Sharp) -->
 <Modal
 	bind:open={assignModalOpen}
-	title={`Assign Task: ${task?.title || ''}`}
+	title={`Review Applicants: ${task?.title || ''}`}
+	size="xl"
 >
 	<div class="space-y-4">
 		<p class="text-xs text-[#465A7A] leading-relaxed font-sans">
-			Select one of the youth who applied. Assigning accepts that application and rejects the other pending applicants.
+			Review each applicant's profile before choosing who should do this work. Assigning accepts that
+			application, releases the other pending applicants and moves the task to
+			<span class="font-mono font-bold text-[#D4831A]">IN_PROGRESS</span>.
 		</p>
 
-		{#if loadingApplicants}
-			<div class="border border-[#C8D4E8] bg-[#F8F9FC] p-4 font-mono text-xs text-[#6A84AC]">
-				Loading applicants...
-			</div>
-		{:else if applicants.length === 0}
-			<div class="border border-[#C49420] bg-[#FFF8E6] p-4 font-sans text-xs text-[#8A6A12]">
-				No pending applications yet. A youth must apply for this task before you can assign it.
-			</div>
-		{:else}
-			<div>
-				<label for="modalYouthId" class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]">
-					Pending Applicant *
-				</label>
-				<select
-					id="modalYouthId"
-					required
-					bind:value={youthIdToAssign}
-					class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-sans"
-				>
-					{#each applicants as applicant}
-						<option value={String(applicant.youthId)}>
-							{applicant.youthName || `Youth #${applicant.youthId}`} — applied {formatDate(applicant.appliedAt, true)}
-						</option>
-					{/each}
-				</select>
-			</div>
-		{/if}
+		<ApplicantReview
+			bind:selectedYouthId={youthIdToAssign}
+			{applicants}
+			{task}
+			loading={loadingApplicants}
+			error={applicantError}
+			assigning={actionLoading}
+			onassign={handleAssignSubmit}
+			onretry={openAssignModal}
+		/>
 	</div>
 
 	{#snippet footer()}
@@ -474,15 +596,7 @@
 			class="cape-btn-secondary px-4 py-2 text-xs font-mono uppercase tracking-wider"
 			onclick={() => (assignModalOpen = false)}
 		>
-			Cancel
-		</button>
-		<button
-			type="button"
-			disabled={actionLoading || loadingApplicants || !youthIdToAssign}
-			class="cape-btn-primary px-5 py-2 text-xs font-mono uppercase tracking-widest disabled:opacity-50"
-			onclick={handleAssignSubmit}
-		>
-			{actionLoading ? 'Assigning...' : 'Confirm Assignment'}
+			Close
 		</button>
 	{/snippet}
 </Modal>
@@ -502,6 +616,9 @@
 				Performance Rating (1 to 5 Stars) *
 			</div>
 			<StarRating bind:rating={verifyRating} interactive={true} size="lg" />
+			<p class="mt-1 font-sans text-[10px] text-[#6A84AC]">
+				The rating is permanent and feeds the youth’s tier progress and public proof record.
+			</p>
 		</div>
 
 		<div>
@@ -511,10 +628,15 @@
 			<textarea
 				id="detailFeedback"
 				rows="3"
+				maxlength="1000"
 				bind:value={verifyFeedback}
-				placeholder="Provide feedback on communication, turnaround time, quality..."
+				placeholder="Be specific: what was delivered, how well, and what stood out? (at least 20 characters)"
 				class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-sans"
 			></textarea>
+			<div class="mt-1 flex items-center justify-between font-mono text-[9px] text-[#6A84AC]">
+				<span>Required · appears on the public ledger</span>
+				<span>{verifyFeedback.length}/1000</span>
+			</div>
 		</div>
 
 		<div>
@@ -524,6 +646,7 @@
 			<input
 				id="detailReference"
 				type="text"
+				maxlength="255"
 				bind:value={verifyReference}
 				placeholder="e.g. Invoice batch #INV-2026-04 or shared drive link"
 				class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-sans"
@@ -531,6 +654,15 @@
 			<p class="mt-1 font-sans text-[11px] text-[#6A84AC]">
 				Stored on the public verification record so anyone can confirm what was checked.
 			</p>
+		</div>
+
+		<div class="border border-[#7C3FE4]/30 bg-[#FAF8FF] p-3">
+			<div class="font-mono text-[9px] font-bold uppercase tracking-widest text-[#7C3FE4]">What happens when you sign</div>
+			<ol class="mt-1.5 space-y-1 text-[11px] leading-relaxed text-[#465A7A] font-sans">
+				<li>1. The task is marked verified and the youth’s ledger record is sealed.</li>
+				<li>2. A payment is queued for admin release.</li>
+				<li>3. The rating and feedback become part of the youth’s permanent proof history.</li>
+			</ol>
 		</div>
 	</div>
 

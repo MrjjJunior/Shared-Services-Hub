@@ -4,10 +4,17 @@
 	import StarRating from '$lib/components/StarRating.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ApiError from '$lib/components/ApiError.svelte';
+	import ApplicantReview from '$lib/components/ApplicantReview.svelte';
 	import { api } from '$lib/api.js';
 	import { currentUser } from '$lib/stores/auth.js';
+	import { lowDataMode } from '$lib/stores/preferences.js';
 	import { toast } from '$lib/stores/toast.js';
-	import { formatCurrency, formatDuration, formatDate } from '$lib/utils/formatters.js';
+	import {
+		formatCurrency,
+		formatDuration,
+		formatDate,
+		formatTier
+	} from '$lib/utils/formatters.js';
 	import { onMount } from 'svelte';
 
 	const user = $derived($currentUser);
@@ -26,6 +33,7 @@
 	let taskDuration = $state(7);
 	let taskPaid = $state(true);
 	let taskDescription = $state('');
+	let taskRequiredTier = $state('ALL');
 
 	// Assign Task Modal State
 	let assignModalOpen = $state(false);
@@ -33,6 +41,7 @@
 	let youthIdToAssign = $state('');
 	let applicants = $state([]);
 	let loadingApplicants = $state(false);
+	let applicantError = $state(null);
 	let assigning = $state(false);
 
 	// Verify Experience Modal State
@@ -57,6 +66,86 @@
 		'Customer Support',
 		'General Administration'
 	];
+
+	const tierOptions = [
+		{ value: 'ALL', label: 'All tiers — open to every candidate' },
+		{ value: 'TIER_0', label: 'Tier 0+ — first opportunity' },
+		{ value: 'TIER_1', label: 'Tier 1+ — one verified experience' },
+		{ value: 'TIER_2', label: 'Tier 2+ — three verified experiences' },
+		{ value: 'TIER_3', label: 'Tier 3 — alumni leader only' }
+	];
+
+	const templates = [
+		{
+			id: 'social-sprint',
+			label: 'Social media sprint',
+			kicker: 'MARKETING',
+			title: 'Social Media Campaign & Content Creation',
+			category: 'Marketing & Creative',
+			budget: 850,
+			duration: 4,
+			requiredTier: 'TIER_1',
+			description:
+				'Create 12 branded social posts and schedule three short-form videos around a product or service launch. Deliver captions, hashtags and a simple posting calendar.'
+		},
+		{
+			id: 'data-cleanup',
+			label: 'Spreadsheet rescue',
+			kicker: 'OPERATIONS',
+			title: 'Data Cleanup & Weekly Reporting',
+			category: 'Digital Operations',
+			budget: 1100,
+			duration: 5,
+			requiredTier: 'TIER_1',
+			description:
+				'Clean an existing supplier or customer list, remove duplicates, standardise fields and build a one-page weekly summary dashboard with clear notes for the team.'
+		},
+		{
+			id: 'customer-followup',
+			label: 'Customer follow-up',
+			kicker: 'SUPPORT',
+			title: 'Customer Follow-up & CRM Notes',
+			category: 'Customer Support',
+			budget: 650,
+			duration: 3,
+			requiredTier: 'ALL',
+			description:
+				'Contact a supplied list of recent customers to confirm details, answer basic questions and capture concise notes in the CRM. Escalate unresolved issues to the owner.'
+		},
+		{
+			id: 'invoice-pack',
+			label: 'Invoice & bookkeeping',
+			kicker: 'FINANCE',
+			title: 'Invoice Reconciliation & Bookkeeping Pack',
+			category: 'Accounting & Finance',
+			budget: 1300,
+			duration: 7,
+			requiredTier: 'TIER_2',
+			description:
+				'Reconcile bank transactions against invoices, flag missing supporting documents and prepare a tidy month-end pack with a short summary of unresolved items.'
+		}
+	];
+
+	const verificationPayout = $derived.by(() => {
+		const total = Number(selectedTaskToVerify?.budget || 0);
+		const platformFee = Math.round(total * 0.1 * 100) / 100;
+		return { total, platformFee, youthAmount: Math.round((total - platformFee) * 100) / 100 };
+	});
+
+	function prepareTemplate(template) {
+		showPostForm = true;
+		postError = null;
+		taskTitle = template.title;
+		taskCategory = template.category;
+		taskBudget = template.budget;
+		taskDuration = template.duration;
+		taskDescription = template.description;
+		taskRequiredTier = template.requiredTier;
+		taskPaid = true;
+		setTimeout(() => {
+			document.getElementById('postTaskForm')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		}, 60);
+	}
 
 	async function loadTasks() {
 		loading = true;
@@ -88,7 +177,8 @@
 			category: taskCategory,
 			budget: Number(taskBudget) || 0,
 			durationDays: Number(taskDuration) || 7,
-			isPaid: Boolean(taskPaid)
+			isPaid: Boolean(taskPaid),
+			requiredTier: taskRequiredTier
 		};
 
 		try {
@@ -99,6 +189,7 @@
 			taskDescription = '';
 			taskBudget = 1000;
 			taskDuration = 7;
+			taskRequiredTier = 'ALL';
 			await loadTasks();
 		} catch (err) {
 			postError = err.message || 'Failed to post task.';
@@ -111,32 +202,32 @@
 		selectedTaskToAssign = task;
 		youthIdToAssign = '';
 		applicants = [];
+		applicantError = null;
 		assignModalOpen = true;
 		loadingApplicants = true;
 		try {
 			const res = await api.applications.forTask(task.id);
 			applicants = (res || []).filter((a) => a.status === 'PENDING');
-			if (applicants.length > 0) {
-				youthIdToAssign = String(applicants[0].youthId);
-			}
 		} catch (err) {
-			toast.error(err.message || 'Failed to load applicants.');
+			applicantError = err.message || 'Failed to load applicants.';
+			toast.error(applicantError);
 		} finally {
 			loadingApplicants = false;
 		}
 	}
 
-	async function handleAssignSubmit() {
-		if (!selectedTaskToAssign || !youthIdToAssign) return;
+	async function handleAssignSubmit(youthId = youthIdToAssign) {
+		const targetYouthId = String(youthId || youthIdToAssign || '');
+		if (!selectedTaskToAssign || !targetYouthId) return;
 
 		assigning = true;
 		try {
-			await api.tasks.assign(selectedTaskToAssign.id, youthIdToAssign);
+			await api.tasks.assign(selectedTaskToAssign.id, targetYouthId);
 			const chosen = applicants.find(
-				(a) => String(a.youthId) === String(youthIdToAssign)
+				(a) => String(a.youthId) === targetYouthId
 			);
 			toast.success(
-				`Task assigned to ${chosen?.youthName || `Youth #${youthIdToAssign}`}!`
+				`Task assigned to ${chosen?.youthName || `Youth #${targetYouthId}`}!`
 			);
 			assignModalOpen = false;
 			await loadTasks();
@@ -150,19 +241,23 @@
 	function openVerifyModal(task) {
 		selectedTaskToVerify = task;
 		verifyRating = 5;
-		verifyFeedback = 'Work was delivered accurately and ahead of deadline. Very dependable.';
+		verifyFeedback = '';
 		verifyReference = '';
 		verifyModalOpen = true;
 	}
 
 	async function handleVerifySubmit() {
 		if (!selectedTaskToVerify) return;
-		if (!verifyFeedback.trim()) {
-			toast.error('Written feedback is required.');
+		if (!Number(verifyRating)) {
+			toast.error('Choose a performance rating before signing off.');
 			return;
 		}
-		if (!verifyReference.trim()) {
-			toast.error('A reference to the work you checked is required.');
+		if (verifyFeedback.trim().length < 20) {
+			toast.error('Please write at least 20 characters of specific feedback.');
+			return;
+		}
+		if (verifyReference.trim().length < 5) {
+			toast.error('A clear reference to the work you checked is required.');
 			return;
 		}
 
@@ -251,7 +346,7 @@
 
 		<!-- Section: Post a Task Form (Sharp, Cape Cobalt) -->
 		{#if showPostForm}
-			<div class="border-2 border-[#1446A0] bg-white p-6 sm:p-8 mb-8 shadow-md">
+			<div id="postTaskForm" class="border-2 border-[#1446A0] bg-white p-6 sm:p-8 mb-8 shadow-md">
 				<div class="flex items-center justify-between pb-4 border-b border-[#C8D4E8] mb-6">
 					<div>
 						<h2 class="font-serif text-2xl text-[#0D1B3E]">Post a New SME Task (Free)</h2>
@@ -268,6 +363,35 @@
 				</div>
 
 				<ApiError message={postError} ondismiss={() => (postError = null)} />
+
+				<!-- Templates -->
+				<div class="mb-6 border border-[#C8D4E8] bg-[#F8F9FC] p-4">
+					<div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+						<div>
+							<div class="font-mono text-[10px] font-bold uppercase tracking-widest text-[#D4831A]">Start from a template</div>
+							<p class="mt-0.5 text-[11px] text-[#6A84AC] font-sans">Pre-fills the brief, category, wage and preferred tier. Edit anything before publishing.</p>
+						</div>
+						<span class="font-mono text-[9px] uppercase tracking-wider text-[#6A84AC]">4 ready-to-use briefs</span>
+					</div>
+					<div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+						{#each templates as template, index}
+							<button
+								type="button"
+								class="border border-[#C8D4E8] bg-white p-3 text-left hover:border-[#1446A0] hover:bg-[#EFF4FF] transition-colors"
+								onclick={() => prepareTemplate(template)}
+							>
+								<div class="flex items-center justify-between gap-2">
+									<span class="font-mono text-[9px] font-bold uppercase tracking-wider text-[#1446A0]">{template.kicker}</span>
+									<span class="font-mono text-[9px] text-[#6A84AC]">0{index + 1}</span>
+								</div>
+								<div class="mt-1 font-serif text-base text-[#0D1B3E]">{template.label}</div>
+								<div class="mt-1 font-mono text-[9px] uppercase tracking-wider text-[#6A84AC]">
+									{formatCurrency(template.budget)} · {template.duration}d · {formatTier(template.requiredTier, true)}
+								</div>
+							</button>
+						{/each}
+					</div>
+				</div>
 
 				<form onsubmit={handlePostTask} class="space-y-6">
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -336,6 +460,25 @@
 								bind:value={taskDuration}
 								class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
 							/>
+						</div>
+
+						<!-- Preferred Tier -->
+						<div>
+							<label for="taskRequiredTier" class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]">
+								Preferred Candidate Tier
+							</label>
+							<select
+								id="taskRequiredTier"
+								bind:value={taskRequiredTier}
+								class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm"
+							>
+								{#each tierOptions as option}
+									<option value={option.value}>{option.label}</option>
+								{/each}
+							</select>
+							<p class="mt-1 text-[10px] text-[#6A84AC] font-sans">
+								Guidance only. Lower-tier candidates can still apply; the ranking shows the fit.
+							</p>
 						</div>
 
 						<!-- Paid Flag -->
@@ -432,6 +575,11 @@
 									<span class="bg-[#EFF4FF] border border-[#C8D4E8] px-2 py-0.5 text-xs font-mono text-[#1446A0]">
 										{task.category}
 									</span>
+									{#if task.requiredTier}
+										<span class="border border-[#7C3FE4]/40 bg-[#F5EEFF] px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider text-[#7C3FE4]">
+											{formatTier(task.requiredTier, true)}
+										</span>
+									{/if}
 									<span class="text-xs font-mono text-[#6A84AC]">
 										Created {formatDate(task.createdAt)}
 									</span>
@@ -443,7 +591,7 @@
 									</a>
 								</h3>
 
-								{#if task.description}
+								{#if task.description && !$lowDataMode}
 									<p class="text-xs text-[#465A7A] line-clamp-1 max-w-2xl font-sans">{task.description}</p>
 								{/if}
 
@@ -508,45 +656,30 @@
 	</div>
 </RoleGuard>
 
-<!-- Modal: Assign Task to Youth (Sharp) -->
+<!-- Modal: Review Applicants and Assign (Sharp) -->
 <Modal
 	bind:open={assignModalOpen}
-	title={`Assign Task: ${selectedTaskToAssign?.title || ''}`}
+	title={`Review Applicants: ${selectedTaskToAssign?.title || ''}`}
+	size="xl"
 >
 	<div class="space-y-4">
 		<p class="text-xs text-[#465A7A] leading-relaxed font-sans">
-			Choose one of the youth who applied for this task. The selected application is accepted, the other
-			pending applicants are released, and the task advances to
+			Open an applicant's profile to review their bio, skills, education, availability, portfolio and
+			cover note. Assigning accepts that application, releases the other pending applicants and moves
+			the task to
 			<span class="font-mono font-bold text-[#D4831A]">IN_PROGRESS</span>.
 		</p>
 
-		{#if loadingApplicants}
-			<div class="border border-[#C8D4E8] bg-[#F8F9FC] p-4 font-mono text-xs text-[#6A84AC]">
-				Loading applicants...
-			</div>
-		{:else if applicants.length === 0}
-			<div class="border border-[#C49420] bg-[#FFF8E6] p-4 font-sans text-xs text-[#8A6A12]">
-				No pending applications yet. Youth must apply before you can assign this task.
-			</div>
-		{:else}
-			<div>
-				<label for="youthIdInput" class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]">
-					Pending Applicant *
-				</label>
-				<select
-					id="youthIdInput"
-					required
-					bind:value={youthIdToAssign}
-					class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-sans"
-				>
-					{#each applicants as applicant}
-						<option value={String(applicant.youthId)}>
-							{applicant.youthName || `Youth #${applicant.youthId}`} — applied {formatDate(applicant.appliedAt, true)}
-						</option>
-					{/each}
-				</select>
-			</div>
-		{/if}
+		<ApplicantReview
+			bind:selectedYouthId={youthIdToAssign}
+			{applicants}
+			task={selectedTaskToAssign}
+			loading={loadingApplicants}
+			error={applicantError}
+			assigning={assigning}
+			onassign={handleAssignSubmit}
+			onretry={() => openAssignModal(selectedTaskToAssign)}
+		/>
 	</div>
 
 	{#snippet footer()}
@@ -555,15 +688,7 @@
 			class="cape-btn-secondary px-4 py-2 text-xs font-mono uppercase tracking-wider"
 			onclick={() => (assignModalOpen = false)}
 		>
-			Cancel
-		</button>
-		<button
-			type="button"
-			disabled={assigning || loadingApplicants || !youthIdToAssign}
-			class="cape-btn-primary px-5 py-2 text-xs font-mono uppercase tracking-widest disabled:opacity-50"
-			onclick={handleAssignSubmit}
-		>
-			{assigning ? 'Assigning...' : 'Confirm Assignment'}
+			Close
 		</button>
 	{/snippet}
 </Modal>
@@ -578,11 +703,27 @@
 			Your evaluation unlocks the candidate's guaranteed corporate wage disbursement and adds permanent proof to their Experience Ledger.
 		</p>
 
+		<div class="grid grid-cols-3 gap-2 border border-[#C8D4E8] bg-[#F8F9FC] p-3">
+			<div>
+				<div class="font-mono text-[9px] uppercase tracking-wider text-[#6A84AC]">Wage reserve</div>
+				<div class="mt-1 font-mono text-sm font-bold text-[#1446A0]">{formatCurrency(verificationPayout.total)}</div>
+			</div>
+			<div>
+				<div class="font-mono text-[9px] uppercase tracking-wider text-[#6A84AC]">Platform fee</div>
+				<div class="mt-1 font-mono text-sm font-bold text-[#6A84AC]">{formatCurrency(verificationPayout.platformFee)}</div>
+			</div>
+			<div>
+				<div class="font-mono text-[9px] uppercase tracking-wider text-[#6A84AC]">Youth receives</div>
+				<div class="mt-1 font-mono text-sm font-bold text-[#1A8A55]">{formatCurrency(verificationPayout.youthAmount)}</div>
+			</div>
+		</div>
+
 		<div>
 			<div class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E] mb-1.5">
 				Performance Rating (1 to 5 Stars) *
 			</div>
 			<StarRating bind:rating={verifyRating} interactive={true} size="lg" />
+			<p class="mt-1 font-sans text-[10px] text-[#6A84AC]">The rating is permanent. It feeds the youth’s tier progress and public proof record.</p>
 		</div>
 
 		<div>
@@ -592,10 +733,15 @@
 			<textarea
 				id="verifyFeedbackInput"
 				rows="3"
+				maxlength="1000"
 				bind:value={verifyFeedback}
-				placeholder="Provide specific comments on quality, speed, and deliverables..."
+				placeholder="Be specific: what was delivered, how well, and what stood out? (at least 20 characters)"
 				class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-sans"
 			></textarea>
+			<div class="mt-1 flex items-center justify-between font-mono text-[9px] text-[#6A84AC]">
+				<span>Required · appears on the public ledger</span>
+				<span>{verifyFeedback.length}/1000</span>
+			</div>
 		</div>
 
 		<div>
@@ -605,6 +751,7 @@
 			<input
 				id="verifyReferenceInput"
 				type="text"
+				maxlength="255"
 				bind:value={verifyReference}
 				placeholder="e.g. Reconciled workbook FIN-MAR-2026.xlsx"
 				class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-sans"
@@ -612,6 +759,15 @@
 			<p class="mt-1 font-sans text-[11px] text-[#6A84AC]">
 				This reference is sealed into the public ledger entry for the experience.
 			</p>
+		</div>
+
+		<div class="border border-[#7C3FE4]/30 bg-[#FAF8FF] p-3">
+			<div class="font-mono text-[9px] font-bold uppercase tracking-widest text-[#7C3FE4]">What happens when you sign</div>
+			<ol class="mt-1.5 space-y-1 text-[11px] leading-relaxed text-[#465A7A] font-sans">
+				<li>1. The task is marked verified and the youth’s ledger record is sealed.</li>
+				<li>2. A payment is queued for admin release at the amount shown above.</li>
+				<li>3. The rating and feedback become part of the youth’s permanent proof history.</li>
+			</ol>
 		</div>
 	</div>
 

@@ -3,6 +3,7 @@
 	 * @typedef {Object} Props
 	 * @property {boolean} open
 	 * @property {string} [title]
+	 * @property {'md'|'lg'|'xl'} [size]
 	 * @property {() => void} [onclose]
 	 * @property {import('svelte').Snippet} [children]
 	 * @property {import('svelte').Snippet} [footer]
@@ -12,10 +13,15 @@
 	let {
 		open = $bindable(false),
 		title = '',
+		size = 'md',
 		onclose = () => {},
 		children,
 		footer
 	} = $props();
+
+	const sizeClass = $derived(
+		size === 'xl' ? 'sm:max-w-4xl' : size === 'lg' ? 'sm:max-w-2xl' : 'sm:max-w-lg'
+	);
 
 	function handleClose() {
 		open = false;
@@ -48,7 +54,7 @@
 		<!-- Dialog Container -->
 		<div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
 			<div
-				class="relative transform overflow-hidden bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg border border-[#C8D4E8] animate-in zoom-in-95 duration-150"
+				class="relative transform overflow-hidden bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full {sizeClass} border border-[#C8D4E8] animate-in zoom-in-95 duration-150"
 			>
 				<!-- Header -->
 				<div class="flex items-center justify-between border-b border-[#C8D4E8] px-6 py-4 bg-[#F8F9FC]">

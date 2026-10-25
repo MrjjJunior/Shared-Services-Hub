@@ -116,3 +116,31 @@
   border-color: #1446A0;
   color: #1446A0;
 }
+
+/* Low-data PWA mode: keep the editorial hierarchy, drop motion and decoration. */
+body.low-data *,
+body.low-data *::before,
+body.low-data *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+body.low-data .low-data-hide {
+  display: none !important;
+}
+
+body.low-data .low-data-compact {
+  padding-top: 1rem !important;
+  padding-bottom: 1rem !important;
+}
+
+/* Accessible focus ring for the sharp architectural controls. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #D4831A;
+  outline-offset: 2px;
+}

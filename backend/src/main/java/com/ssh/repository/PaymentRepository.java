@@ -61,6 +61,11 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
      */
     List<Payment> findByStatusNot(String status);
 
+    /**
+     * Newest-first payment queue for the admin payout dashboard.
+     */
+    List<Payment> findAllByOrderByCreatedAtDesc();
+
     // TODO: Add @Query("SELECT SUM(p.youthAmount) FROM Payment p WHERE p.youth = :youth AND p.status = 'PAID'")
     //       Double findTotalPaidToYouth(Youth youth);
     // TODO: Add List<Payment> findByPaidAtBetween(LocalDateTime start, LocalDateTime end);

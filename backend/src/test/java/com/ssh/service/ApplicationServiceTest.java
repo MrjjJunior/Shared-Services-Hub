@@ -12,6 +12,7 @@ import com.ssh.exception.BusinessRuleException;
 import com.ssh.exception.DuplicateResourceException;
 import com.ssh.exception.TierEligibilityException;
 import com.ssh.repository.ApplicationRepository;
+import com.ssh.repository.ExperienceRepository;
 import com.ssh.repository.TaskRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,6 +51,7 @@ class ApplicationServiceTest {
     @Mock private TaskRepository taskRepository;
     @Mock private UserAccountService userAccountService;
     @Mock private TierEligibilityService tierEligibilityService;
+    @Mock private ExperienceRepository experienceRepository;
 
     private ApplicationService applicationService;
 
@@ -65,7 +67,7 @@ class ApplicationServiceTest {
             Instant.parse("2026-01-01T10:00:00Z"), ZoneOffset.UTC);
         applicationService = new ApplicationService(
             applicationRepository, taskRepository, userAccountService,
-            tierEligibilityService, clock);
+            tierEligibilityService, experienceRepository, clock);
 
         User youthUser = new User("Sipho Dlamini", YOUTH_EMAIL, "hash", "YOUTH");
         youthUser.setId(3L);
@@ -361,6 +363,38 @@ class ApplicationServiceTest {
 
             assertThat(applications).hasSize(1);
             assertThat(applications.get(0).youthId()).isEqualTo(youth.getId());
+        }
+
+        @Test
+        @DisplayName("Given an applicant, When the SME reviews applications, Then the full profile is returned")
+        void shouldIncludeFullApplicantProfile_ForSmeReview() {
+            youth.setSkills("Excel, Data Entry");
+            youth.setEducation("BCom Accounting, CPUT");
+            youth.setLocation("Cape Town, Western Cape");
+            youth.setAvailability("Weekdays after 2pm");
+            youth.setBio("I turn messy spreadsheets into clear decisions.");
+            youth.setPortfolio("https://thabo-portfolio.example.co.za");
+
+            Application pending = new Application(
+                task, youth, "I can start today", NOW.plusHours(10));
+            pending.setId(8L);
+
+            when(userAccountService.requireSme(SME_EMAIL)).thenReturn(sme);
+            when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+            when(applicationRepository.findByTaskOrderByCreatedAtAsc(task))
+                .thenReturn(List.of(pending));
+
+            ApplicationResponse response = applicationService
+                .listForTask(task.getId(), SME_EMAIL)
+                .get(0);
+
+            assertThat(response.youthSkills()).isEqualTo("Excel, Data Entry");
+            assertThat(response.youthEducation()).isEqualTo("BCom Accounting, CPUT");
+            assertThat(response.youthLocation()).isEqualTo("Cape Town, Western Cape");
+            assertThat(response.youthAvailability()).isEqualTo("Weekdays after 2pm");
+            assertThat(response.youthBio()).isEqualTo("I turn messy spreadsheets into clear decisions.");
+            assertThat(response.youthPortfolio()).isEqualTo("https://thabo-portfolio.example.co.za");
+            assertThat(response.coverNote()).isEqualTo("I can start today");
         }
 
         @Test

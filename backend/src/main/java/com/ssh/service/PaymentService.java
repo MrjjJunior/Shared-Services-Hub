@@ -91,6 +91,18 @@ public class PaymentService {
     }
 
     /**
+     * Admin payout queue: every payment, newest first.
+     */
+    public List<PaymentResponse> listAll(String adminEmail) {
+        var admin = userAccountService.requireUser(adminEmail);
+        userAccountService.requireAnyRole(admin, "ADMIN");
+        return paymentRepository.findAllByOrderByCreatedAtDesc()
+            .stream()
+            .map(PaymentResponse::from)
+            .collect(Collectors.toList());
+    }
+
+    /**
      * Sandbox payout: debit the funder reserve and mark the payment PAID.
      * Only an admin can release money.
      */

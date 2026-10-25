@@ -1,11 +1,40 @@
 import { browser } from '$app/environment';
 import { auth, TOKEN_KEY } from '$lib/stores/auth.js';
+import { isDemoMode } from '$lib/stores/preferences.js';
 import { toast } from '$lib/stores/toast.js';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 // In-browser mock fallback data for offline / demo preview
-const MOCK_STORAGE_KEY = 'ssh_mock_db_v2';
+const MOCK_STORAGE_KEY = 'ssh_mock_db_v3';
+
+const daysAgo = (days, hours = 0) =>
+	new Date(Date.now() - (days * 24 + hours) * 3600 * 1000).toISOString();
+
+// Seeded applicant profiles used by the demo applicant-review surface.
+const DEMO_APPLICANT_PROFILES = {
+	1: {
+		bio: 'Final-year accounting student in Cape Town. I like turning messy spreadsheets into clear decisions and I am available for short operational sprints.',
+		portfolio: 'https://thabo-portfolio.example.co.za'
+	},
+	2: {
+		bio: 'Marketing graduate in Johannesburg with a strong eye for clean visuals and product storytelling. I have run content calendars for two local brands and enjoy turning a brief into posts that feel on-brand.',
+		portfolio: 'https://naledi-khumalo.example.co.za'
+	},
+	3: {
+		bio: 'Matric graduate from Soweto building a track record in accurate data capture and stock counts. I work quickly through repetitive lists and double-check my own work.',
+		portfolio: ''
+	},
+	4: {
+		bio: 'Visual designer in Durban focused on simple, usable brand and document systems. I work in Figma and Canva and like leaving teams with templates they can maintain.',
+		portfolio: 'https://lerato-maseko.example.co.za'
+	}
+};
+
+function demoApplicantProfile(youthId) {
+	const profile = DEMO_APPLICANT_PROFILES[Number(youthId)] || {};
+	return { youthBio: profile.bio || '', youthPortfolio: profile.portfolio || '' };
+}
 
 function getMockDb() {
 	if (!browser) return null;
@@ -19,6 +48,21 @@ function getMockDb() {
 	}
 
 	const initialDb = {
+		profile: {
+			id: 1,
+			userId: 1,
+			userName: 'Thabo Mokoena',
+			education: 'BCom Accounting, CPUT',
+			skills: 'Excel, Bookkeeping, Customer Support, Data Entry',
+			portfolio: 'https://thabo-portfolio.example.co.za',
+			bio: 'Final-year accounting student in Cape Town. I like turning messy spreadsheets into clear decisions and I am available for short operational sprints.',
+			location: 'Cape Town, Western Cape',
+			availability: 'Weekdays after 2pm · weekends',
+			isAlumni: false,
+			alumniDate: null,
+			createdAt: daysAgo(90),
+			updatedAt: daysAgo(2)
+		},
 		tasks: [
 			{
 				id: 1,
@@ -29,12 +73,13 @@ function getMockDb() {
 				budget: 1200.0,
 				durationDays: 5,
 				isPaid: true,
+				requiredTier: null,
 				smeId: 101,
 				smeBusinessName: 'Kasi Craftworks Co.',
 				assignedToId: null,
 				assignedToName: null,
-				createdAt: new Date(Date.now() - 3600000 * 24 * 3).toISOString(),
-				updatedAt: new Date(Date.now() - 3600000 * 24 * 3).toISOString()
+				createdAt: daysAgo(3),
+				updatedAt: daysAgo(3)
 			},
 			{
 				id: 2,
@@ -45,12 +90,13 @@ function getMockDb() {
 				budget: 850.0,
 				durationDays: 4,
 				isPaid: true,
-				smeId: 102,
-				smeBusinessName: 'Ubuntu Organic Foods',
+				requiredTier: null,
+				smeId: 101,
+				smeBusinessName: 'Kasi Craftworks Co.',
 				assignedToId: 1,
 				assignedToName: 'Thabo Mokoena',
-				createdAt: new Date(Date.now() - 3600000 * 24 * 5).toISOString(),
-				updatedAt: new Date(Date.now() - 3600000 * 24 * 1).toISOString()
+				createdAt: daysAgo(5),
+				updatedAt: daysAgo(1)
 			},
 			{
 				id: 3,
@@ -61,12 +107,13 @@ function getMockDb() {
 				budget: 1500.0,
 				durationDays: 7,
 				isPaid: true,
-				smeId: 103,
-				smeBusinessName: 'Lindiwe Logistics',
+				requiredTier: null,
+				smeId: 101,
+				smeBusinessName: 'Kasi Craftworks Co.',
 				assignedToId: 1,
 				assignedToName: 'Thabo Mokoena',
-				createdAt: new Date(Date.now() - 3600000 * 24 * 10).toISOString(),
-				updatedAt: new Date(Date.now() - 3600000 * 24 * 2).toISOString()
+				createdAt: daysAgo(10),
+				updatedAt: daysAgo(2)
 			},
 			{
 				id: 4,
@@ -77,28 +124,132 @@ function getMockDb() {
 				budget: 700.0,
 				durationDays: 3,
 				isPaid: true,
+				requiredTier: null,
 				smeId: 101,
 				smeBusinessName: 'Kasi Craftworks Co.',
 				assignedToId: 1,
 				assignedToName: 'Thabo Mokoena',
-				createdAt: new Date(Date.now() - 3600000 * 24 * 14).toISOString(),
-				updatedAt: new Date(Date.now() - 3600000 * 24 * 4).toISOString()
+				createdAt: daysAgo(14),
+				updatedAt: daysAgo(4)
 			},
 			{
 				id: 5,
 				title: 'POS Hardware Setup & Inventory Audit',
-				description: 'Setup Yoco payment terminals at 2 pop-up stalls and conduct physical stock count.',
+				description: 'Setup Yoco payment terminals at 2 pop-up stalls and conduct a physical stock count.',
 				category: 'IT & Technical',
 				status: 'OPEN',
 				budget: 950.0,
 				durationDays: 2,
 				isPaid: true,
+				requiredTier: null,
 				smeId: 104,
 				smeBusinessName: 'Soweto Solar Solutions',
 				assignedToId: null,
 				assignedToName: null,
-				createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-				updatedAt: new Date(Date.now() - 3600000 * 12).toISOString()
+				createdAt: daysAgo(0, 12),
+				updatedAt: daysAgo(0, 12)
+			},
+			{
+				id: 6,
+				title: 'Data Capturing & Excel Reporting',
+				description: 'Clean 600 supplier records and build a weekly stock dashboard from existing spreadsheets.',
+				category: 'Accounting & Finance',
+				status: 'OPEN',
+				budget: 1100.0,
+				durationDays: 4,
+				isPaid: true,
+				requiredTier: 'TIER_1',
+				smeId: 105,
+				smeBusinessName: 'Mzansi Fresh Produce',
+				assignedToId: null,
+				assignedToName: null,
+				createdAt: daysAgo(1),
+				updatedAt: daysAgo(1)
+			},
+			{
+				id: 7,
+				title: 'Website Copy Refresh',
+				description: 'Rewrite six service pages for a clearer, warmer tone and align the calls to action.',
+				category: 'Marketing & Creative',
+				status: 'VERIFIED',
+				budget: 900.0,
+				durationDays: 4,
+				isPaid: true,
+				requiredTier: 'TIER_1',
+				smeId: 101,
+				smeBusinessName: 'Kasi Craftworks Co.',
+				assignedToId: 1,
+				assignedToName: 'Thabo Mokoena',
+				createdAt: daysAgo(22),
+				updatedAt: daysAgo(8)
+			},
+			{
+				id: 8,
+				title: 'Monthly Bookkeeping Cleanup',
+				description: 'Categorise three months of transactions and prepare a reconciliation pack for the accountant.',
+				category: 'Accounting & Finance',
+				status: 'VERIFIED',
+				budget: 1300.0,
+				durationDays: 6,
+				isPaid: true,
+				requiredTier: 'TIER_1',
+				smeId: 106,
+				smeBusinessName: 'Lindiwe Logistics',
+				assignedToId: 1,
+				assignedToName: 'Thabo Mokoena',
+				createdAt: daysAgo(30),
+				updatedAt: daysAgo(16)
+			},
+			{
+				id: 9,
+				title: 'CRM Data Hygiene Sprint',
+				description: 'Merge duplicate contacts and document a repeatable cleanup checklist for the sales team.',
+				category: 'Digital Operations',
+				status: 'OPEN',
+				budget: 800.0,
+				durationDays: 3,
+				isPaid: true,
+				requiredTier: 'TIER_2',
+				smeId: 107,
+				smeBusinessName: 'Cape Agile Studio',
+				assignedToId: null,
+				assignedToName: null,
+				createdAt: daysAgo(2),
+				updatedAt: daysAgo(2)
+			},
+			{
+				id: 10,
+				title: 'Call Centre QA & Script Review',
+				description: 'Listen to 20 recorded calls and flag the top five script improvements for the support lead.',
+				category: 'Customer Support',
+				status: 'OPEN',
+				budget: 600.0,
+				durationDays: 2,
+				isPaid: true,
+				requiredTier: null,
+				smeId: 108,
+				smeBusinessName: 'Ubuntu Organic Foods',
+				assignedToId: null,
+				assignedToName: null,
+				createdAt: daysAgo(0, 5),
+				updatedAt: daysAgo(0, 5)
+			},
+			{
+				id: 11,
+				title: 'Invoice Template Design',
+				description: 'Create two branded invoice templates and a one-page how-to guide for the finance assistant.',
+				category: 'Accounting & Finance',
+				status: 'OPEN',
+				budget: 750.0,
+				durationDays: 3,
+				isPaid: true,
+				requiredTier: 'TIER_1',
+				smeId: 101,
+				smeBusinessName: 'Kasi Craftworks Co.',
+				assignedToId: null,
+				assignedToName: null,
+				createdAt: daysAgo(0, 3),
+				updatedAt: daysAgo(0, 3)
 			}
 		],
 		experiences: [
@@ -107,16 +258,16 @@ function getMockDb() {
 				status: 'VERIFIED',
 				isVerified: true,
 				feedback: 'Thabo showed exceptional attention to detail and completed customer verification ahead of schedule. Excellent communication skills.',
-				rating: 4.8,
+				rating: 5,
 				reference: 'CRM export: customer-verification-batch-04.csv',
-				verifiedAt: new Date(Date.now() - 3600000 * 24 * 4).toISOString(),
+				verifiedAt: daysAgo(4),
 				taskId: 4,
 				taskTitle: 'Customer Onboarding & Verification Calls',
 				smeBusinessName: 'Kasi Craftworks Co.',
 				youthId: 1,
 				youthName: 'Thabo Mokoena',
-				createdAt: new Date(Date.now() - 3600000 * 24 * 14).toISOString(),
-				updatedAt: new Date(Date.now() - 3600000 * 24 * 4).toISOString()
+				createdAt: daysAgo(14),
+				updatedAt: daysAgo(4)
 			},
 			{
 				id: 2,
@@ -128,15 +279,322 @@ function getMockDb() {
 				verifiedAt: null,
 				taskId: 3,
 				taskTitle: 'Financial Records Reconciliation & Invoicing',
+				smeBusinessName: 'Kasi Craftworks Co.',
+				youthId: 1,
+				youthName: 'Thabo Mokoena',
+				createdAt: daysAgo(10),
+				updatedAt: daysAgo(2)
+			},
+			{
+				id: 3,
+				status: 'VERIFIED',
+				isVerified: true,
+				feedback: 'Clear, warm copy that sounded like us. Thabo incorporated feedback quickly and delivered ahead of the deadline.',
+				rating: 4.5,
+				reference: 'Website copy deck v3 · signed off by Thandi',
+				verifiedAt: daysAgo(8),
+				taskId: 7,
+				taskTitle: 'Website Copy Refresh',
+				smeBusinessName: 'Kasi Craftworks Co.',
+				youthId: 1,
+				youthName: 'Thabo Mokoena',
+				createdAt: daysAgo(22),
+				updatedAt: daysAgo(8)
+			},
+			{
+				id: 4,
+				status: 'VERIFIED',
+				isVerified: true,
+				feedback: 'Reconciliation pack was accurate and easy to audit. Good use of comments and version naming.',
+				rating: 4,
+				reference: 'Reconciliation pack · Jan–Mar 2026',
+				verifiedAt: daysAgo(16),
+				taskId: 8,
+				taskTitle: 'Monthly Bookkeeping Cleanup',
 				smeBusinessName: 'Lindiwe Logistics',
 				youthId: 1,
 				youthName: 'Thabo Mokoena',
-				createdAt: new Date(Date.now() - 3600000 * 24 * 10).toISOString(),
-				updatedAt: new Date(Date.now() - 3600000 * 24 * 2).toISOString()
+				createdAt: daysAgo(30),
+				updatedAt: daysAgo(16)
 			}
 		],
-		applications: [],
-		payments: []
+		applications: [
+			{
+				id: 1,
+				taskId: 2,
+				taskTitle: 'Social Media Campaign & Content Creation',
+				youthId: 1,
+				youthName: 'Thabo Mokoena',
+				status: 'ACCEPTED',
+				coverNote: 'I can turn the campaign brief into a clear content calendar.',
+				appliedAt: daysAgo(6),
+				expiresAt: daysAgo(5),
+				decidedAt: daysAgo(5),
+				youthTier: 'TIER_2',
+				youthVerifiedExperienceCount: 3,
+				youthAverageRating: 4.5,
+				youthSkills: 'Excel, Bookkeeping, Customer Support, Data Entry',
+				youthEducation: 'BCom Accounting, CPUT',
+				youthLocation: 'Cape Town, Western Cape',
+				youthAvailability: 'Weekdays after 2pm · weekends'
+			},
+			{
+				id: 2,
+				taskId: 3,
+				taskTitle: 'Financial Records Reconciliation & Invoicing',
+				youthId: 1,
+				youthName: 'Thabo Mokoena',
+				status: 'ACCEPTED',
+				coverNote: 'I have completed a similar Sage reconciliation for a small retailer.',
+				appliedAt: daysAgo(11),
+				expiresAt: daysAgo(10),
+				decidedAt: daysAgo(10),
+				youthTier: 'TIER_2',
+				youthVerifiedExperienceCount: 3,
+				youthAverageRating: 4.5,
+				youthSkills: 'Excel, Bookkeeping, Customer Support, Data Entry',
+				youthEducation: 'BCom Accounting, CPUT',
+				youthLocation: 'Cape Town, Western Cape',
+				youthAvailability: 'Weekdays after 2pm · weekends'
+			},
+			{
+				id: 3,
+				taskId: 4,
+				taskTitle: 'Customer Onboarding & Verification Calls',
+				youthId: 1,
+				youthName: 'Thabo Mokoena',
+				status: 'ACCEPTED',
+				coverNote: 'Comfortable with outbound calls and CRM notes.',
+				appliedAt: daysAgo(15),
+				expiresAt: daysAgo(14),
+				decidedAt: daysAgo(14),
+				youthTier: 'TIER_2',
+				youthVerifiedExperienceCount: 3,
+				youthAverageRating: 4.5,
+				youthSkills: 'Excel, Bookkeeping, Customer Support, Data Entry',
+				youthEducation: 'BCom Accounting, CPUT',
+				youthLocation: 'Cape Town, Western Cape',
+				youthAvailability: 'Weekdays after 2pm · weekends'
+			},
+			{
+				id: 4,
+				taskId: 5,
+				taskTitle: 'POS Hardware Setup & Inventory Audit',
+				youthId: 1,
+				youthName: 'Thabo Mokoena',
+				status: 'PENDING',
+				coverNote: 'I am available this week and have done a stock count before.',
+				appliedAt: daysAgo(0, 8),
+				expiresAt: daysAgo(-2),
+				decidedAt: null,
+				youthTier: 'TIER_2',
+				youthVerifiedExperienceCount: 3,
+				youthAverageRating: 4.5,
+				youthSkills: 'Excel, Bookkeeping, Customer Support, Data Entry',
+				youthEducation: 'BCom Accounting, CPUT',
+				youthLocation: 'Cape Town, Western Cape',
+				youthAvailability: 'Weekdays after 2pm · weekends'
+			},
+			{
+				id: 5,
+				taskId: 7,
+				taskTitle: 'Website Copy Refresh',
+				youthId: 1,
+				youthName: 'Thabo Mokoena',
+				status: 'ACCEPTED',
+				coverNote: 'I enjoy making services easier to understand.',
+				appliedAt: daysAgo(23),
+				expiresAt: daysAgo(22),
+				decidedAt: daysAgo(22),
+				youthTier: 'TIER_2',
+				youthVerifiedExperienceCount: 3,
+				youthAverageRating: 4.5,
+				youthSkills: 'Excel, Bookkeeping, Customer Support, Data Entry',
+				youthEducation: 'BCom Accounting, CPUT',
+				youthLocation: 'Cape Town, Western Cape',
+				youthAvailability: 'Weekdays after 2pm · weekends'
+			},
+			{
+				id: 6,
+				taskId: 8,
+				taskTitle: 'Monthly Bookkeeping Cleanup',
+				youthId: 1,
+				youthName: 'Thabo Mokoena',
+				status: 'ACCEPTED',
+				coverNote: 'Bookkeeping is my strongest subject and I can start immediately.',
+				appliedAt: daysAgo(31),
+				expiresAt: daysAgo(30),
+				decidedAt: daysAgo(30),
+				youthTier: 'TIER_2',
+				youthVerifiedExperienceCount: 3,
+				youthAverageRating: 4.5,
+				youthSkills: 'Excel, Bookkeeping, Customer Support, Data Entry',
+				youthEducation: 'BCom Accounting, CPUT',
+				youthLocation: 'Cape Town, Western Cape',
+				youthAvailability: 'Weekdays after 2pm · weekends'
+			},
+			{
+				id: 7,
+				taskId: 1,
+				taskTitle: 'E-commerce Product Catalog Digitization',
+				youthId: 2,
+				youthName: 'Naledi Khumalo',
+				status: 'PENDING',
+				coverNote: 'I have photographed and loaded 200+ products for two local brands.',
+				appliedAt: daysAgo(1, 4),
+				expiresAt: daysAgo(-1),
+				decidedAt: null,
+				youthTier: 'TIER_1',
+				youthVerifiedExperienceCount: 2,
+				youthAverageRating: 4.8,
+				youthSkills: 'Social Media, Canva, Copywriting, Product Photography',
+				youthEducation: 'Diploma in Marketing, Vega',
+				youthLocation: 'Johannesburg, Gauteng',
+				youthAvailability: 'Immediate · flexible'
+			},
+			{
+				id: 8,
+				taskId: 1,
+				taskTitle: 'E-commerce Product Catalog Digitization',
+				youthId: 3,
+				youthName: 'Sipho Dlamini',
+				status: 'PENDING',
+				coverNote: 'Fast, accurate data entry. I can work through the full catalogue this week.',
+				appliedAt: daysAgo(1, 2),
+				expiresAt: daysAgo(-1),
+				decidedAt: null,
+				youthTier: 'TIER_0',
+				youthVerifiedExperienceCount: 0,
+				youthAverageRating: null,
+				youthSkills: 'Data Entry, Excel',
+				youthEducation: 'Matric, Orlando High',
+				youthLocation: 'Soweto, Gauteng',
+				youthAvailability: 'Weekends'
+			},
+			{
+				id: 9,
+				taskId: 6,
+				taskTitle: 'Data Capturing & Excel Reporting',
+				youthId: 2,
+				youthName: 'Naledi Khumalo',
+				status: 'PENDING',
+				coverNote: 'I am comfortable turning raw lists into a clean weekly dashboard.',
+				appliedAt: daysAgo(0, 10),
+				expiresAt: daysAgo(-2),
+				decidedAt: null,
+				youthTier: 'TIER_1',
+				youthVerifiedExperienceCount: 2,
+				youthAverageRating: 4.8,
+				youthSkills: 'Social Media, Canva, Copywriting, Product Photography',
+				youthEducation: 'Diploma in Marketing, Vega',
+				youthLocation: 'Johannesburg, Gauteng',
+				youthAvailability: 'Immediate · flexible'
+			},
+			{
+				id: 10,
+				taskId: 11,
+				taskTitle: 'Invoice Template Design',
+				youthId: 4,
+				youthName: 'Lerato Maseko',
+				status: 'PENDING',
+				coverNote: 'I can design a clean template in Canva and write the handover guide.',
+				appliedAt: daysAgo(0, 4),
+				expiresAt: daysAgo(-2),
+				decidedAt: null,
+				youthTier: 'TIER_1',
+				youthVerifiedExperienceCount: 1,
+				youthAverageRating: 4.2,
+				youthSkills: 'Design, Figma, Canva, Brand Systems',
+				youthEducation: 'BA Visual Arts, Wits',
+				youthLocation: 'Durban, KwaZulu-Natal',
+				youthAvailability: 'Flexible'
+			}
+		],
+		payments: [
+			{
+				id: 1,
+				taskId: 4,
+				taskTitle: 'Customer Onboarding & Verification Calls',
+				youthId: 1,
+				youthName: 'Thabo Mokoena',
+				totalAmount: 700,
+				platformFee: 70,
+				youthAmount: 630,
+				status: 'PAID',
+				reference: 'SANDBOX-2026-04-04-001',
+				paidAt: daysAgo(3),
+				createdAt: daysAgo(4)
+			},
+			{
+				id: 2,
+				taskId: 7,
+				taskTitle: 'Website Copy Refresh',
+				youthId: 1,
+				youthName: 'Thabo Mokoena',
+				totalAmount: 900,
+				platformFee: 90,
+				youthAmount: 810,
+				status: 'PAID',
+				reference: 'SANDBOX-2026-04-08-002',
+				paidAt: daysAgo(7),
+				createdAt: daysAgo(8)
+			},
+			{
+				id: 3,
+				taskId: 8,
+				taskTitle: 'Monthly Bookkeeping Cleanup',
+				youthId: 1,
+				youthName: 'Thabo Mokoena',
+				totalAmount: 1300,
+				platformFee: 130,
+				youthAmount: 1170,
+				status: 'PENDING',
+				reference: null,
+				paidAt: null,
+				createdAt: daysAgo(16)
+			}
+		],
+		wallet: {
+			id: 1,
+			name: 'Corporate ESD Reserve',
+			balance: 100000,
+			currency: 'ZAR',
+			updatedAt: daysAgo(3)
+		},
+		walletTransactions: [
+			{
+				id: 1,
+				type: 'CREDIT',
+				amount: 150000,
+				balanceAfter: 150000,
+				reference: 'Initial ESD funding · Standard Bank Foundation',
+				createdAt: daysAgo(120)
+			},
+			{
+				id: 2,
+				type: 'DEBIT',
+				amount: 630,
+				balanceAfter: 149370,
+				reference: 'Payout for payment #1 · Customer Onboarding',
+				createdAt: daysAgo(3)
+			},
+			{
+				id: 3,
+				type: 'DEBIT',
+				amount: 810,
+				balanceAfter: 148560,
+				reference: 'Payout for payment #2 · Website Copy Refresh',
+				createdAt: daysAgo(7)
+			},
+			{
+				id: 4,
+				type: 'DEBIT',
+				amount: 1170,
+				balanceAfter: 147390,
+				reference: 'Reserved for payment #3 · Monthly Bookkeeping Cleanup',
+				createdAt: daysAgo(16)
+			}
+		]
 	};
 
 	saveMockDb(initialDb);
@@ -146,6 +604,16 @@ function getMockDb() {
 function saveMockDb(db) {
 	if (!browser) return;
 	localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(db));
+}
+
+/**
+ * Wipes local demo changes and reseeds the sample database.
+ * Used by the /demo page so every reviewer starts from the same story.
+ */
+export function resetMockDb() {
+	if (!browser) return;
+	localStorage.removeItem(MOCK_STORAGE_KEY);
+	return getMockDb();
 }
 
 /**
@@ -209,9 +677,9 @@ function handleMockFallback(endpoint, method, body) {
 		};
 	}
 
-	// TASKS: List
+	// TASKS: List (the real API exposes open tasks only)
 	if (cleanPath === '/api/v1/tasks' && method === 'GET') {
-		return db.tasks;
+		return db.tasks.filter((task) => task.status === 'OPEN');
 	}
 
 	// TASKS: My posted tasks (SME)
@@ -239,6 +707,7 @@ function handleMockFallback(endpoint, method, body) {
 			budget: Number(body.budget) || 0,
 			durationDays: Number(body.durationDays) || 7,
 			isPaid: Boolean(body.isPaid),
+			requiredTier: body.requiredTier && body.requiredTier !== 'ALL' ? body.requiredTier : null,
 			smeId: 101,
 			smeBusinessName: 'Kasi Craftworks Co.',
 			assignedToId: null,
@@ -307,25 +776,46 @@ function handleMockFallback(endpoint, method, body) {
 			);
 		}
 		const expiresAt = new Date(Date.now() + 48 * 3600 * 1000).toISOString();
+		const profile = db.profile || {};
+		const rated = db.experiences.filter(
+			(e) => Number(e.youthId) === youthId && e.isVerified && e.rating
+		);
+		const averageRating = rated.length
+			? Math.round((rated.reduce((sum, e) => sum + Number(e.rating), 0) / rated.length) * 10) / 10
+			: null;
+		const applicantMeta = {
+			youthTier: `TIER_${tierIndex}`,
+			youthVerifiedExperienceCount: verified,
+			youthAverageRating: averageRating,
+			youthSkills: profile.skills || '',
+			youthEducation: profile.education || '',
+			youthLocation: profile.location || '',
+			youthAvailability: profile.availability || '',
+			youthBio: profile.bio || '',
+			youthPortfolio: profile.portfolio || ''
+		};
 		if (!application) {
 			application = {
 				id: db.applications.length + 1,
 				taskId: id,
 				taskTitle: task.title,
 				youthId,
-				youthName: 'Thabo Mokoena',
+				youthName: profile.userName || 'Thabo Mokoena',
 				status: 'PENDING',
 				coverNote: body?.coverNote || '',
 				appliedAt: new Date().toISOString(),
 				expiresAt,
-				decidedAt: null
+				decidedAt: null,
+				...applicantMeta
 			};
 			db.applications.push(application);
 		} else {
 			application.status = 'PENDING';
 			application.coverNote = body?.coverNote || '';
+			application.appliedAt = new Date().toISOString();
 			application.expiresAt = expiresAt;
 			application.decidedAt = null;
+			Object.assign(application, applicantMeta);
 		}
 		saveMockDb(db);
 		return application;
@@ -340,7 +830,9 @@ function handleMockFallback(endpoint, method, body) {
 	const taskApplicationsMatch = cleanPath.match(/^\/api\/v1\/tasks\/(\d+)\/applications$/);
 	if (taskApplicationsMatch && method === 'GET') {
 		const id = Number(taskApplicationsMatch[1]);
-		return db.applications.filter((a) => a.taskId === id);
+		return db.applications
+			.filter((a) => a.taskId === id)
+			.map((application) => ({ ...application, ...demoApplicantProfile(application.youthId) }));
 	}
 
 	// APPLICATIONS: Withdraw
@@ -383,14 +875,32 @@ function handleMockFallback(endpoint, method, body) {
 
 	// YOUTH: My profile
 	if (cleanPath === '/api/v1/youth/me' && method === 'GET') {
-		return {
-			id: 1,
-			userId: 1,
-			userName: 'Thabo Mokoena',
-			location: 'Cape Town',
-			availability: 'Immediate',
-			isAlumni: false
-		};
+		if (!db.profile) {
+			db.profile = {
+				id: 1,
+				userId: 1,
+				userName: 'Thabo Mokoena',
+				education: '',
+				skills: '',
+				portfolio: '',
+				bio: '',
+				location: 'Cape Town',
+				availability: 'Immediate',
+				isAlumni: false
+			};
+			saveMockDb(db);
+		}
+		return db.profile;
+	}
+
+	if (cleanPath === '/api/v1/youth/me' && method === 'PATCH') {
+		if (!db.profile) db.profile = { id: 1, userId: 1, userName: 'Thabo Mokoena' };
+		['education', 'skills', 'portfolio', 'bio', 'location', 'availability'].forEach((field) => {
+			if (body && body[field] !== undefined) db.profile[field] = body[field];
+		});
+		db.profile.updatedAt = new Date().toISOString();
+		saveMockDb(db);
+		return db.profile;
 	}
 
 	// TASKS: Complete
@@ -558,9 +1068,16 @@ function handleMockFallback(endpoint, method, body) {
 		return exp;
 	}
 
-	// EXPERIENCES: My payments
+	// PAYMENTS: My payments
 	if (cleanPath === '/api/v1/payments/mine' && method === 'GET') {
 		return db.payments.filter((p) => Number(p.youthId) === 1);
+	}
+
+	// PAYMENTS: Admin payout queue
+	if (cleanPath === '/api/v1/payments' && method === 'GET') {
+		return [...db.payments].sort(
+			(a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+		);
 	}
 
 	// PAYMENTS: Payout (sandbox)
@@ -573,8 +1090,64 @@ function handleMockFallback(endpoint, method, body) {
 		payment.status = 'PAID';
 		payment.reference = 'SANDBOX-' + Date.now();
 		payment.paidAt = new Date().toISOString();
+		if (!db.wallet) {
+			db.wallet = { id: 1, name: 'Corporate ESD Reserve', balance: 100000, currency: 'ZAR' };
+		}
+		db.wallet.balance = Math.max(0, Number(db.wallet.balance) - Number(payment.youthAmount || 0));
+		db.wallet.updatedAt = new Date().toISOString();
+		if (!db.walletTransactions) db.walletTransactions = [];
+		db.walletTransactions.unshift({
+			id: db.walletTransactions.length + 1,
+			type: 'DEBIT',
+			amount: Number(payment.youthAmount || 0),
+			balanceAfter: db.wallet.balance,
+			reference: `Payout for payment #${payment.id} · ${payment.taskTitle}`,
+			createdAt: new Date().toISOString()
+		});
 		saveMockDb(db);
 		return payment;
+	}
+
+	// WALLET: Reserve balance
+	if (cleanPath === '/api/v1/wallets/reserve' && method === 'GET') {
+		if (!db.wallet) {
+			db.wallet = {
+				id: 1,
+				name: 'Corporate ESD Reserve',
+				balance: 100000,
+				currency: 'ZAR',
+				updatedAt: new Date().toISOString()
+			};
+			saveMockDb(db);
+		}
+		return db.wallet;
+	}
+
+	// WALLET: Transactions
+	if (cleanPath === '/api/v1/wallets/reserve/transactions' && method === 'GET') {
+		return db.walletTransactions || [];
+	}
+
+	// WALLET: Fund reserve
+	if (cleanPath === '/api/v1/wallets/reserve/fund' && method === 'POST') {
+		if (!db.wallet) {
+			db.wallet = { id: 1, name: 'Corporate ESD Reserve', balance: 0, currency: 'ZAR' };
+		}
+		const amount = Number(body?.amount) || 0;
+		if (amount <= 0) throw new Error('Funding amount must be greater than zero');
+		db.wallet.balance = Number(db.wallet.balance) + amount;
+		db.wallet.updatedAt = new Date().toISOString();
+		if (!db.walletTransactions) db.walletTransactions = [];
+		db.walletTransactions.unshift({
+			id: db.walletTransactions.length + 1,
+			type: 'CREDIT',
+			amount,
+			balanceAfter: db.wallet.balance,
+			reference: body?.reference || 'Corporate reserve funding',
+			createdAt: new Date().toISOString()
+		});
+		saveMockDb(db);
+		return db.wallet;
 	}
 
 	// LEDGER: Public entries
@@ -598,11 +1171,27 @@ function handleMockFallback(endpoint, method, body) {
 
 	// LEDGER: Verify chain
 	if (cleanPath === '/api/v1/ledger/verify' && method === 'GET') {
+		const count = db.experiences.filter((e) => e.isVerified).length;
 		return {
 			valid: true,
-			checkedEntries: db.experiences.filter((e) => e.isVerified).length,
+			checkedEntries: count,
 			brokenAtSequence: null,
-			message: 'Ledger chain is intact'
+			message: `Ledger chain is intact (${count} entries verified)`
+		};
+	}
+
+	// LEDGER: Verify one experience
+	const ledgerExperienceMatch = cleanPath.match(/^\/api\/v1\/ledger\/verify\/(\d+)$/);
+	if (ledgerExperienceMatch && method === 'GET') {
+		const experienceId = Number(ledgerExperienceMatch[1]);
+		const exp = db.experiences.find((e) => e.id === experienceId && e.isVerified);
+		if (!exp) throw new Error('No ledger entry for this experience');
+		const count = db.experiences.filter((e) => e.isVerified).length;
+		return {
+			valid: true,
+			checkedEntries: count,
+			brokenAtSequence: null,
+			message: `Entry for experience #${experienceId} is valid and chains back to genesis`
 		};
 	}
 
@@ -617,6 +1206,26 @@ function handleMockFallback(endpoint, method, body) {
 export async function request(endpoint, options = {}) {
 	const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
 	const headers = new Headers(options.headers || {});
+	const method = options.method || 'GET';
+	let parsedBody = options.body;
+	if (typeof options.body === 'string') {
+		try {
+			parsedBody = JSON.parse(options.body);
+		} catch {
+			parsedBody = options.body;
+		}
+	}
+
+	// Demo mode deliberately bypasses the network so the full story works
+	// without a backend, seeded accounts, or a clean database.
+	if (browser && isDemoMode()) {
+		await new Promise((resolve) => setTimeout(resolve, 140));
+		try {
+			return handleMockFallback(endpoint, method, parsedBody);
+		} catch (mockError) {
+			throw new Error(mockError.message || 'Demo route is unavailable.');
+		}
+	}
 
 	if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) {
 		headers.set('Content-Type', 'application/json');
@@ -728,7 +1337,8 @@ export const api = {
 		me: () => api.get('/api/v1/tiers/me')
 	},
 	youth: {
-		me: () => api.get('/api/v1/youth/me')
+		me: () => api.get('/api/v1/youth/me'),
+		update: (profile) => api.patch('/api/v1/youth/me', profile)
 	},
 	experiences: {
 		get: (id) => api.get(`/api/v1/experiences/${id}`),
@@ -742,6 +1352,7 @@ export const api = {
 	},
 	payments: {
 		mine: () => api.get('/api/v1/payments/mine'),
+		listAll: () => api.get('/api/v1/payments'),
 		get: (id) => api.get(`/api/v1/payments/${id}`),
 		payout: (id) => api.post(`/api/v1/payments/${id}/payout`)
 	},
@@ -756,6 +1367,9 @@ export const api = {
 		verify: () => api.get('/api/v1/ledger/verify'),
 		verifyExperience: (experienceId) =>
 			api.get(`/api/v1/ledger/verify/${experienceId}`)
+	},
+	demo: {
+		reset: () => resetMockDb()
 	}
 };
 

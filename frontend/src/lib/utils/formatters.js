@@ -58,6 +58,28 @@ export function formatDuration(days) {
 }
 
 /**
+ * Formats a tier code into a short label.
+ * @param {string} tier e.g. TIER_2
+ * @param {boolean} includePlus
+ * @returns {string}
+ */
+export function formatTier(tier, includePlus = false) {
+	if (!tier || tier === 'ALL') return 'All tiers';
+	const label = String(tier).replace('_', ' ');
+	return includePlus && tier !== 'TIER_0' ? `${label}+` : label;
+}
+
+/**
+ * Returns the numeric index of a tier code.
+ * @param {string} tier
+ * @returns {number}
+ */
+export function tierIndex(tier) {
+	const match = String(tier || '').match(/TIER_(\d)/);
+	return match ? Number(match[1]) : 0;
+}
+
+/**
  * Formats role into clean user-facing title
  * @param {string} role
  * @returns {string}

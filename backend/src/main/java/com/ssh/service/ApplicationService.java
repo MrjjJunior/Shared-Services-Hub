@@ -4,14 +4,17 @@ import com.ssh.dto.request.ApplicationRequest;
 import com.ssh.dto.response.ApplicationResponse;
 import com.ssh.entity.Application;
 import com.ssh.entity.ApplicationStatus;
+import com.ssh.entity.Experience;
 import com.ssh.entity.SME;
 import com.ssh.entity.Task;
 import com.ssh.entity.TaskStatus;
+import com.ssh.entity.Tier;
 import com.ssh.entity.Youth;
 import com.ssh.exception.BusinessRuleException;
 import com.ssh.exception.DuplicateResourceException;
 import com.ssh.exception.ResourceNotFoundException;
 import com.ssh.repository.ApplicationRepository;
+import com.ssh.repository.ExperienceRepository;
 import com.ssh.repository.TaskRepository;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -32,17 +35,20 @@ public class ApplicationService {
     private final TaskRepository taskRepository;
     private final UserAccountService userAccountService;
     private final TierEligibilityService tierEligibilityService;
+    private final ExperienceRepository experienceRepository;
     private final Clock clock;
 
     public ApplicationService(ApplicationRepository applicationRepository,
                               TaskRepository taskRepository,
                               UserAccountService userAccountService,
                               TierEligibilityService tierEligibilityService,
+                              ExperienceRepository experienceRepository,
                               Clock clock) {
         this.applicationRepository = applicationRepository;
         this.taskRepository = taskRepository;
         this.userAccountService = userAccountService;
         this.tierEligibilityService = tierEligibilityService;
+        this.experienceRepository = experienceRepository;
         this.clock = clock;
     }
 
@@ -104,7 +110,7 @@ public class ApplicationService {
             application = new Application(task, youth, coverNote, expiresAt);
         }
 
-        return ApplicationResponse.from(applicationRepository.save(application));
+        return toResponse(applicationRepository.save(application));
     }
 
     /**
@@ -168,7 +174,7 @@ public class ApplicationService {
         }
 
         application.withdraw();
-        return ApplicationResponse.from(applicationRepository.save(application));
+        return toResponse(applicationRepository.save(application));
     }
 
     public List<ApplicationResponse> listMine(String youthEmail) {
@@ -176,7 +182,7 @@ public class ApplicationService {
         tierEligibilityService.expireStaleReservations(youth);
         return applicationRepository.findByYouthOrderByCreatedAtDesc(youth)
             .stream()
-            .map(ApplicationResponse::from)
+            .map(this::toResponse)
             .collect(Collectors.toList());
     }
 
@@ -198,9 +204,44 @@ public class ApplicationService {
                     application.expire();
                     applicationRepository.save(application);
                 }
-                return ApplicationResponse.from(application);
+                return toResponse(application);
             })
             .collect(Collectors.toList());
+    }
+
+    /**
+     * Enriches an application with the applicant summary the SME needs to
+     * rank candidates. The data is scoped to the task owner by the controller
+     * service methods above.
+     */
+    private ApplicationResponse toResponse(Application application) {
+        Youth youth = application.getYouth();
+        Tier tier = tierEligibilityService.resolveTier(youth);
+        long verified = experienceRepository.countByYouthAndIsVerifiedTrue(youth);
+        List<Experience> experiences = experienceRepository.findByYouth(youth);
+        java.util.OptionalDouble ratings = (experiences == null ? List.<Experience>of() : experiences)
+            .stream()
+            .filter(Experience::isVerified)
+            .map(Experience::getRating)
+            .filter(rating -> rating != null)
+            .mapToDouble(Double::doubleValue)
+            .average();
+        Double averageRating = ratings.isPresent()
+            ? Math.round(ratings.getAsDouble() * 10.0) / 10.0
+            : null;
+
+        return ApplicationResponse.from(
+            application,
+            tier != null ? tier.name() : null,
+            verified,
+            averageRating,
+            youth.getSkills(),
+            youth.getEducation(),
+            youth.getLocation(),
+            youth.getAvailability(),
+            youth.getBio(),
+            youth.getPortfolio()
+        );
     }
 
     private Application requireApplication(Long applicationId) {

@@ -1,13 +1,17 @@
 package com.ssh.controller;
 
+import com.ssh.dto.request.YouthProfileRequest;
 import com.ssh.dto.response.ApiResponse;
 import com.ssh.dto.response.YouthResponse;
 import com.ssh.service.YouthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,5 +36,16 @@ public class YouthController {
         return ResponseEntity.ok(ApiResponse.success(
             "Youth profile",
             youthService.getMyProfile(authentication.getName())));
+    }
+
+    @PatchMapping("/me")
+    @Operation(summary = "Update my youth profile (YOUTH only)")
+    public ResponseEntity<ApiResponse<YouthResponse>> updateMe(
+        @Valid @RequestBody YouthProfileRequest request,
+        Authentication authentication) {
+
+        return ResponseEntity.ok(ApiResponse.success(
+            "Youth profile updated",
+            youthService.updateMyProfile(authentication.getName(), request)));
     }
 }

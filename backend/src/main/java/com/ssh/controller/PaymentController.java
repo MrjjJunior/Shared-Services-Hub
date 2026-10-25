@@ -34,6 +34,14 @@ public class PaymentController {
             paymentService.listMine(authentication.getName())));
     }
 
+    @GetMapping
+    @Operation(summary = "List the full payment queue (ADMIN only)")
+    public ResponseEntity<ApiResponse<List<PaymentResponse>>> listAll(Authentication authentication) {
+        return ResponseEntity.ok(ApiResponse.success(
+            "Payment queue",
+            paymentService.listAll(authentication.getName())));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Get a payment (admin, owning SME, or paid youth)")
     public ResponseEntity<ApiResponse<PaymentResponse>> get(
