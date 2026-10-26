@@ -36,6 +36,8 @@
 	let verifyRating = $state(5);
 	let verifyFeedback = $state('');
 	let verifyReference = $state('');
+	let verifyConfirmedSkills = $state([]);
+	let cancelModalOpen = $state(false);
 	let rejectModalOpen = $state(false);
 	let rejectReason = $state('');
 
@@ -213,7 +215,17 @@
 		verifyRating = 5;
 		verifyFeedback = '';
 		verifyReference = '';
+		verifyConfirmedSkills = Array.isArray(task?.assignedYouthSkills)
+			? task.assignedYouthSkills.map((label) => ({ label, checked: false }))
+			: [];
 		verifyModalOpen = true;
+	}
+
+	function toggleVerifySkill(index) {
+		if (!verifyConfirmedSkills[index]) return;
+		verifyConfirmedSkills = verifyConfirmedSkills.map((skill, i) =>
+			i === index ? { ...skill, checked: !skill.checked } : skill
+		);
 	}
 
 	async function handleVerifySubmit() {
@@ -236,13 +248,30 @@
 				task.id,
 				verifyFeedback.trim(),
 				verifyRating,
-				verifyReference.trim()
+				verifyReference.trim(),
+				verifyConfirmedSkills
+					.filter((skill) => skill.checked)
+					.map((skill) => skill.label)
 			);
 			toast.success('Experience verified and recorded to Experience Ledger!');
 			verifyModalOpen = false;
 			await loadTask();
 		} catch (err) {
 			toast.error(err.message || 'Failed to verify experience.');
+		} finally {
+			actionLoading = false;
+		}
+	}
+
+	async function handleCancelSubmit() {
+		if (!task) return;
+		actionLoading = true;
+		try {
+			task = await api.tasks.cancel(task.id);
+			toast.success('Task cancelled. Pending applications were released.');
+			cancelModalOpen = false;
+		} catch (err) {
+			toast.error(err.message || 'Failed to cancel task.');
 		} finally {
 			actionLoading = false;
 		}
@@ -532,6 +561,13 @@
 									>
 										Review Applicants &amp; Assign
 									</button>
+									<button
+										type="button"
+										class="border border-[#B23A48] bg-[#FCF2F3] px-4 py-2.5 text-xs font-mono uppercase tracking-wider font-bold text-[#B23A48] hover:bg-[#B23A48] hover:text-white transition-colors"
+										onclick={() => (cancelModalOpen = true)}
+									>
+										Cancel Task
+									</button>
 								{:else if task.status === 'COMPLETED'}
 									<button
 										type="button"
@@ -551,6 +587,13 @@
 									<span class="border border-[#C8D4E8] bg-[#F8F9FC] px-4 py-2 text-xs font-mono font-bold text-[#6A84AC] uppercase">
 										Awaiting Youth Completion
 									</span>
+									<button
+										type="button"
+										class="border border-[#B23A48] bg-[#FCF2F3] px-4 py-2.5 text-xs font-mono uppercase tracking-wider font-bold text-[#B23A48] hover:bg-[#B23A48] hover:text-white transition-colors"
+										onclick={() => (cancelModalOpen = true)}
+									>
+										Cancel Task
+									</button>
 								{:else if task.status === 'VERIFIED'}
 									<span class="border border-[#7C3FE4] bg-[#F5EEFF] px-4 py-2 text-xs font-mono font-bold text-[#7C3FE4] uppercase">
 										✓ Verified &amp; Payment Created
@@ -620,6 +663,30 @@
 				The rating is permanent and feeds the youth’s tier progress and public proof record.
 			</p>
 		</div>
+
+		{#if verifyConfirmedSkills.length > 0}
+			<div>
+				<div class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E] mb-1.5">
+					Skills the Youth Demonstrated (optional)
+				</div>
+				<div class="flex flex-wrap gap-1.5">
+					{#each verifyConfirmedSkills as skill, i}
+						<button
+							type="button"
+							class="border px-3 py-1.5 text-xs font-mono uppercase tracking-wider transition-colors {skill.checked
+								? 'bg-[#1446A0] border-[#1446A0] text-white font-bold'
+								: 'border-[#C8D4E8] bg-white text-[#465A7A] hover:border-[#1446A0] hover:text-[#1446A0]'}"
+							onclick={() => toggleVerifySkill(i)}
+						>
+							{skill.checked ? '✓ ' : '+ '}{skill.label}
+						</button>
+					{/each}
+				</div>
+				<p class="mt-1 font-sans text-[10px] text-[#6A84AC]">
+					Tick the skills you can confirm from the delivered work — confirmed skills are sealed into the public ledger entry.
+				</p>
+			</div>
+		{/if}
 
 		<div>
 			<label for="detailFeedback" class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]">
@@ -724,6 +791,49 @@
 			onclick={handleRejectSubmit}
 		>
 			{actionLoading ? 'Sending...' : 'Send Back for Revision'}
+		</button>
+	{/snippet}
+</Modal>
+
+<!-- Modal: Cancel Task -->
+<Modal
+	bind:open={cancelModalOpen}
+	title={`Cancel Task: ${task?.title || ''}`}
+>
+	<div class="space-y-4">
+		<p class="text-xs text-[#465A7A] leading-relaxed font-sans">
+			Cancelling withdraws this task permanently
+			{#if task?.assignedToName}
+				— the assigned youth’s work will be closed without payment
+			{/if}. Every pending application is released immediately, so applicants get
+			their 48-hour reservation back and can apply elsewhere.
+		</p>
+
+		<div class="border border-[#B23A48]/30 bg-[#FCF2F3] p-3">
+			<div class="font-mono text-[9px] font-bold uppercase tracking-widest text-[#B23A48]">Before you cancel</div>
+			<ol class="mt-1.5 space-y-1 text-[11px] leading-relaxed text-[#465A7A] font-sans">
+				<li>1. Cancelled tasks cannot be reopened — to reject completed work use Send Back for Revision instead.</li>
+				<li>2. Pending applicants return to the task queue with their reservation released.</li>
+				<li>3. No youth is paid for a cancelled task, so cancel before any work is verified.</li>
+			</ol>
+		</div>
+	</div>
+
+	{#snippet footer()}
+		<button
+			type="button"
+			class="cape-btn-secondary px-4 py-2 text-xs font-mono uppercase tracking-wider"
+			onclick={() => (cancelModalOpen = false)}
+		>
+			Keep Task
+		</button>
+		<button
+			type="button"
+			disabled={actionLoading}
+			class="bg-[#B23A48] text-white px-5 py-2 text-xs font-mono uppercase tracking-widest font-bold hover:bg-[#95303c] disabled:opacity-50"
+			onclick={handleCancelSubmit}
+		>
+			{actionLoading ? 'Cancelling...' : 'Cancel Task'}
 		</button>
 	{/snippet}
 </Modal>

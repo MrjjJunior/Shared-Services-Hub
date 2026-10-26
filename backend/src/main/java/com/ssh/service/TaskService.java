@@ -13,6 +13,7 @@ import com.ssh.entity.Task;
 import com.ssh.entity.TaskStatus;
 import com.ssh.entity.User;
 import com.ssh.entity.Youth;
+import com.ssh.event.TaskCancelledEvent;
 import com.ssh.event.TaskVerifiedEvent;
 import com.ssh.exception.BusinessRuleException;
 import com.ssh.exception.InvalidRequestException;
@@ -191,7 +192,8 @@ public class TaskService {
         experience.verify(
             request.feedback().trim(),
             request.rating(),
-            request.reference().trim()
+            request.reference().trim(),
+            normalizeSkills(request.confirmedSkills())
         );
         Experience verifiedExperience = experienceService.save(experience);
 
@@ -250,6 +252,34 @@ public class TaskService {
         return toTaskResponse(taskRepository.save(task));
     }
 
+    /**
+     * Cancels an OPEN or IN_PROGRESS task. Only the owning SME may cancel.
+     * Every outstanding PENDING application is released so applicants get
+     * their reservation slot back, and a TaskCancelledEvent is published in
+     * the same transaction. COMPLETED/VERIFIED tasks use verify/reject instead.
+     */
+    @Transactional
+    public TaskResponse cancelTask(Long taskId, String reason, String smeEmail) {
+        SME sme = userAccountService.requireSme(smeEmail);
+        Task task = requireTask(taskId);
+        requireTaskOwner(task, sme, "cancel");
+
+        Long youthId = task.getAssignedTo() != null ? task.getAssignedTo().getId() : null;
+
+        task.cancel();
+        applicationService.releasePendingApplications(task);
+        Task saved = taskRepository.save(task);
+
+        eventPublisher.publishEvent(new TaskCancelledEvent(
+            saved.getId(),
+            sme.getId(),
+            youthId,
+            reason != null && !reason.isBlank() ? reason.trim() : "Cancelled by the SME"
+        ));
+
+        return toTaskResponse(saved);
+    }
+
     // ============================================
     // HELPERS
     // ============================================
@@ -290,6 +320,25 @@ public class TaskService {
         return normalized.matches("TIER_[0-3]") ? normalized : null;
     }
 
+    /**
+     * Normalises the SME-confirmed skills: trimmed, de-duplicated, capped at
+     * 12 entries of at most 50 characters, comma-joined for storage on the
+     * experience and ledger entry.
+     */
+    private static String normalizeSkills(List<String> skills) {
+        if (skills == null) {
+            return null;
+        }
+        String joined = skills.stream()
+            .filter(skill -> skill != null && !skill.isBlank())
+            .map(skill -> skill.trim())
+            .map(skill -> skill.length() > 50 ? skill.substring(0, 50) : skill)
+            .limit(12)
+            .distinct()
+            .collect(Collectors.joining(", "));
+        return joined.isBlank() ? null : joined;
+    }
+
     public TaskResponse toTaskResponse(Task task) {
         TaskResponse response = new TaskResponse(
             task.getId(),
@@ -316,8 +365,24 @@ public class TaskService {
         if (task.getAssignedTo() != null) {
             response.setAssignedToId(task.getAssignedTo().getId());
             response.setAssignedToName(task.getAssignedTo().getUser().getName());
+            response.setAssignedYouthSkills(splitSkills(task.getAssignedTo().getSkills()));
         }
 
         return response;
+    }
+
+    /**
+     * Splits the youth's stored comma-separated skills into a list for the
+     * response; empty when the profile has no skills recorded.
+     */
+    private static List<String> splitSkills(String skills) {
+        if (skills == null || skills.isBlank()) {
+            return List.of();
+        }
+        return List.of(skills.split(","))
+            .stream()
+            .filter(skill -> skill != null && !skill.isBlank())
+            .map(String::trim)
+            .toList();
     }
 }

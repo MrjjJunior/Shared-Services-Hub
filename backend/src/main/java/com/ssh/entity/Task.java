@@ -263,6 +263,24 @@ public class Task {
     }
 
     /**
+     * Cancels the task: the owning SME withdraws it before any work is
+     * verified. Allowed while the task is OPEN (no youth started) or
+     * IN_PROGRESS (work started but not completed).
+     *
+     * @throws InvalidTaskTransitionException when the task is COMPLETED,
+     *         VERIFIED or already CANCELLED (those paths use verify/reject)
+     */
+    public void cancel() {
+        TaskStatus current = getStatusEnum();
+        if (current != TaskStatus.OPEN && current != TaskStatus.IN_PROGRESS) {
+            throw new InvalidTaskTransitionException(
+                "Cannot cancel task " + id + ": expected status OPEN or IN_PROGRESS but was "
+                    + current);
+        }
+        transitionTo(TaskStatus.CANCELLED);
+    }
+
+    /**
      * Ensures the task is in the status an operation requires.
      */
     private void requireStatus(TaskStatus expected, String action) {

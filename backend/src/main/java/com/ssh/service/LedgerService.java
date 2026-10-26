@@ -1,9 +1,12 @@
 package com.ssh.service;
 
+import com.ssh.dto.response.LedgerEntryResponse;
 import com.ssh.entity.Experience;
 import com.ssh.entity.LedgerEntry;
+import com.ssh.entity.Youth;
 import com.ssh.exception.ResourceNotFoundException;
 import com.ssh.repository.LedgerEntryRepository;
+import com.ssh.repository.YouthRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,11 +24,14 @@ import java.util.Optional;
  * Hash-chained public ledger.
  *
  * Every verified Experience appends one entry:
- *   hash = SHA-256(sequence | experienceId | taskId | youthId | rating |
- *                  feedback | reference | verifiedAt | previousHash)
+ *   v1: hash = SHA-256(sequence | experienceId | taskId | youthId | rating |
+ *                       feedback | reference | verifiedAt | previousHash)
+ *   v2: v1 payload + | confirmedSkills   (sealed when the SME confirms skills)
  *
  * The first entry chains from the well-known GENESIS hash. Re-walking the
- * chain detects any retroactive edit to an earlier entry.
+ * chain detects any retroactive edit to an earlier entry. chain_version pins
+ * which payload an entry was hashed with, so adding fields never invalidates
+ * historical hashes.
  */
 @Service
 public class LedgerService {
@@ -33,10 +39,14 @@ public class LedgerService {
     public static final String GENESIS_HASH = "GENESIS";
 
     private final LedgerEntryRepository ledgerEntryRepository;
+    private final YouthRepository youthRepository;
     private final Clock clock;
 
-    public LedgerService(LedgerEntryRepository ledgerEntryRepository, Clock clock) {
+    public LedgerService(LedgerEntryRepository ledgerEntryRepository,
+                         YouthRepository youthRepository,
+                         Clock clock) {
         this.ledgerEntryRepository = ledgerEntryRepository;
+        this.youthRepository = youthRepository;
         this.clock = clock;
     }
 
@@ -71,7 +81,9 @@ public class LedgerService {
             experience.getFeedback(),
             experience.getReference(),
             verifiedAt,
-            previousHash
+            previousHash,
+            experience.getConfirmedSkills(),
+            2
         );
         entry.setHash(sha256(canonical(entry)));
 
@@ -80,6 +92,23 @@ public class LedgerService {
 
     public List<LedgerEntry> listEntries() {
         return ledgerEntryRepository.findAllByOrderBySequenceAsc();
+    }
+
+    /**
+     * POPIA-aware response shaping shared by the public ledger endpoints.
+     *
+     * Unauthenticated readers always get the reference withheld, and get the
+     * SME feedback only when the youth opted in. Authenticated readers (any
+     * signed-in role) see the full entry.
+     */
+    public LedgerEntryResponse toShapedResponse(LedgerEntry entry, boolean includeProtectedFields) {
+        if (includeProtectedFields) {
+            return LedgerEntryResponse.from(entry);
+        }
+        boolean feedbackShared = youthRepository.findById(entry.getYouthId())
+            .map(Youth::isShareFeedbackPublicly)
+            .orElse(false);
+        return LedgerEntryResponse.publicFrom(entry, feedbackShared);
     }
 
     public LedgerEntry getEntry(Long id) {
@@ -148,9 +177,13 @@ public class LedgerService {
     /**
      * Canonical payload. Null values are represented as an empty string so
      * the hash never depends on to-string implementation details.
+     *
+     * chain_version dispatch:
+     *   v1 (legacy rows, chain_version == null or 1): the original nine fields.
+     *   v2: the v1 fields plus | confirmedSkills.
      */
     public static String canonical(LedgerEntry entry) {
-        return entry.getSequence()
+        String base = entry.getSequence()
             + "|" + entry.getExperienceId()
             + "|" + entry.getTaskId()
             + "|" + entry.getYouthId()
@@ -159,6 +192,10 @@ public class LedgerService {
             + "|" + value(entry.getReference())
             + "|" + (entry.getVerifiedAt() != null ? entry.getVerifiedAt().toString() : "")
             + "|" + entry.getPreviousHash();
+        if (entry.getChainVersion() != null && entry.getChainVersion() >= 2) {
+            base = base + "|" + value(entry.getConfirmedSkills());
+        }
+        return base;
     }
 
     public static String sha256(String input) {

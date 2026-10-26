@@ -44,6 +44,9 @@ public class YouthService {
         if (request.getBio() != null) youth.setBio(request.getBio().trim());
         if (request.getLocation() != null) youth.setLocation(request.getLocation().trim());
         if (request.getAvailability() != null) youth.setAvailability(request.getAvailability().trim());
+        if (request.getShareFeedbackPublicly() != null) {
+            youth.setShareFeedbackPublicly(request.getShareFeedbackPublicly());
+        }
 
         return toResponse(youthRepository.save(youth));
     }
@@ -61,6 +64,7 @@ public class YouthService {
         response.setAvailability(youth.getAvailability());
         response.setAlumni(youth.isAlumni());
         response.setAlumniDate(youth.getAlumniDate());
+        response.setShareFeedbackPublicly(youth.isShareFeedbackPublicly());
         response.setCreatedAt(youth.getCreatedAt());
         response.setUpdatedAt(youth.getUpdatedAt());
         return response;

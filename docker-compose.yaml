@@ -3,21 +3,24 @@ services:
   # POSTGRESQL DATABASE
   # Stores all SSH data: users, tasks, payments,
   # experience records, and audit logs
+  # Credentials come from the environment so the
+  # compose file is safe to commit; defaults match
+  # backend/src/main/resources/application.properties.
   # ============================================
   postgres:
     image: postgres:16-alpine
     container_name: ssh-postgres
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     environment:
-      POSTGRES_DB: ssh
-      POSTGRES_USER: ssh_user
-      POSTGRES_PASSWORD: ssh_password
+      POSTGRES_DB: ${POSTGRES_DB:-ssh}
+      POSTGRES_USER: ${POSTGRES_USER:-ssh_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ssh_password}
     command: postgres -c max_connections=200
     volumes:
       - ssh-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ssh_user"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ssh_user} -d ${POSTGRES_DB:-ssh}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -31,7 +34,7 @@ services:
     image: redis:7-alpine
     container_name: ssh-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - ssh-redis-data:/data
     healthcheck:
@@ -39,6 +42,66 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # ============================================
+  # SPRING BOOT BACKEND
+  # Multi-stage Maven build (see backend/Dockerfile).
+  # Pointed at the postgres + redis services above
+  # via Spring's standard environment overrides.
+  # ============================================
+  backend:
+    build:
+      context: ./backend
+    container_name: ssh-backend
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      PORT: ${BACKEND_PORT:-8080}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-ssh}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-ssh_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-ssh_password}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-sshSuperSecretKeyForDevOnly123456789}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/v3/api-docs >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  # ============================================
+  # SVELTEKIT FRONTEND
+  # adapter-node server (see frontend/Dockerfile).
+  # The browser calls the backend on the host's
+  # 8080, so keep BACKEND_PORT consistent with
+  # VITE_API_BASE_URL when you change it.
+  # ============================================
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${FRONTEND_API_URL:-http://localhost:8080}
+    container_name: ssh-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      PORT: 3000
+      ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
 # ============================================
 # PERSISTENT VOLUMES

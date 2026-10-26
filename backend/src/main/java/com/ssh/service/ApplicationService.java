@@ -140,6 +140,24 @@ public class ApplicationService {
     }
 
     /**
+     * Releases every PENDING application on a task so the applicants get
+     * their 48-hour reservation slot back. Used when the owning SME cancels
+     * the task — the task is no longer available.
+     */
+    @Transactional
+    public void releasePendingApplications(Task task) {
+        if (task == null) {
+            return;
+        }
+        for (Application application : applicationRepository.findByTaskOrderByCreatedAtAsc(task)) {
+            if (application.isPending()) {
+                application.reject();
+                applicationRepository.save(application);
+            }
+        }
+    }
+
+    /**
      * Accepts the chosen application and rejects every other pending
      * application for the task.
      */

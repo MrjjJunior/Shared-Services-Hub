@@ -46,6 +46,12 @@ public class ExperienceResponse {
 
     private String rejectionReason;
 
+    /**
+     * Skills the SME confirmed were demonstrated (split from the stored
+     * comma-separated string); empty when no skills were confirmed.
+     */
+    private java.util.List<String> confirmedSkills;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -93,6 +99,11 @@ public class ExperienceResponse {
 
     public String getRejectionReason() { return rejectionReason; }
     public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
+
+    public java.util.List<String> getConfirmedSkills() { return confirmedSkills; }
+    public void setConfirmedSkills(java.util.List<String> confirmedSkills) {
+        this.confirmedSkills = confirmedSkills;
+    }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

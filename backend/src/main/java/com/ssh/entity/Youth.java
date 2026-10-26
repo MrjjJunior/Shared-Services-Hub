@@ -98,6 +98,21 @@ public class Youth {
     @OneToMany(mappedBy = "assignedTo")
     private List<Task> tasks = new ArrayList<>();
 
+    /**
+     * POPIA opt-in: when true, the youth's verified-work feedback quote may be
+     * shown on the anonymous public ledger. The evidence reference is never
+     * published anonymously regardless of this flag.
+     * <p>
+     * ColumnDefault("false") matters: HBM2DDL "update" adds the column as
+     * DEFAULT false NOT NULL, which Postgres accepts on tables that already
+     * hold rows (they are backfilled with false). Without it, the ALTER TABLE
+     * fails on any database created before this flag existed and all Youth
+     * writes on that database break.
+     */
+    @org.hibernate.annotations.ColumnDefault("false")
+    @Column(name = "share_feedback_publicly", nullable = false)
+    private boolean shareFeedbackPublicly = false;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
@@ -204,6 +219,14 @@ public class Youth {
 
     public void setAlumni(boolean alumni) {
         isAlumni = alumni;
+    }
+
+    public boolean isShareFeedbackPublicly() {
+        return shareFeedbackPublicly;
+    }
+
+    public void setShareFeedbackPublicly(boolean shareFeedbackPublicly) {
+        this.shareFeedbackPublicly = shareFeedbackPublicly;
     }
 
     public LocalDateTime getAlumniDate() {

@@ -43,6 +43,7 @@ import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -137,7 +138,9 @@ class FullFlowIntegrationTest {
         // ---- Verify ----
         VerificationResponse verification = taskService.verifyTask(
             taskId,
-            new VerificationRequest(5.0, "Excellent catalogue work", "https://evidence/" + suffix),
+            new VerificationRequest(
+                5.0, "Excellent catalogue work", "https://evidence/" + suffix,
+                List.of("Product tagging", "Photography")),
             smeUser.getEmail()
         );
 
@@ -179,7 +182,7 @@ class FullFlowIntegrationTest {
         // ---- Duplicate prevention ----
         assertThatThrownBy(() -> taskService.verifyTask(
             taskId,
-            new VerificationRequest(4.0, "Again", "https://evidence/again"),
+            new VerificationRequest(4.0, "Again", "https://evidence/again", null),
             smeUser.getEmail()))
             .isInstanceOf(InvalidTaskTransitionException.class);
 

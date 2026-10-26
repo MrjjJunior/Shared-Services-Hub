@@ -1,5 +1,6 @@
 package com.ssh.controller;
 
+import com.ssh.dto.request.CancelTaskRequest;
 import com.ssh.dto.request.RejectTaskRequest;
 import com.ssh.dto.request.TaskRequest;
 import com.ssh.dto.request.VerificationRequest;
@@ -164,5 +165,26 @@ public class TaskController {
         TaskResponse rejected =
             taskService.rejectTask(id, request.reason(), authentication.getName());
         return ResponseEntity.ok(ApiResponse.success("Task sent back for revision", rejected));
+    }
+
+    /**
+     * Cancel an OPEN or IN_PROGRESS task; owner only. Outstanding PENDING
+     * applications are released so applicants get their reservation back.
+     */
+    @PatchMapping("/{id}/cancel")
+    @Operation(
+        summary = "Cancel a task (owning SME only)",
+        description = "Only allowed while the task is OPEN or IN_PROGRESS. Releases every "
+            + "outstanding PENDING application and publishes TASK_CANCELLED."
+    )
+    public ResponseEntity<ApiResponse<TaskResponse>> cancelTask(
+        @PathVariable Long id,
+        @RequestBody(required = false) CancelTaskRequest request,
+        Authentication authentication) {
+
+        String reason = request != null ? request.reason() : null;
+        TaskResponse cancelled =
+            taskService.cancelTask(id, reason, authentication.getName());
+        return ResponseEntity.ok(ApiResponse.success("Task cancelled", cancelled));
     }
 }

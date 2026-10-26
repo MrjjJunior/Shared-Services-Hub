@@ -7,12 +7,15 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-/**
- * Mandatory input for verifying completed work.
- *
- * All three fields are required. The rating must be between 1 and 5, and the
- * reference must point at concrete evidence the SME actually checked.
- */
+import java.util.List;
+
+ /**
+  * Mandatory input for verifying completed work.
+  *
+  * rating, feedback and reference are required. confirmedSkills is optional:
+  * the skills the SME explicitly confirms were demonstrated, sealed into the
+  * ledger entry so the youth's verified record carries proof of competence.
+  */
 public record VerificationRequest(
     @NotNull(message = "Rating is required")
     @DecimalMin(value = "1.0", message = "Rating must be at least 1")
@@ -34,6 +37,15 @@ public record VerificationRequest(
         description = "Evidence the SME checked (URL, delivery note or file reference)",
         example = "https://shop.example.com/collections/all"
     )
-    String reference
+    String reference,
+
+    @Size(max = 12, message = "At most 12 skills can be confirmed per task")
+    @Schema(
+        description = "Skills the SME explicitly confirmed were demonstrated on this task. "
+            + "Optional; each skill is sealed into the ledger entry.",
+        example = "[\"Product tagging\", \"Photography\"]"
+    )
+    List<String> confirmedSkills
 ) {
 }
+

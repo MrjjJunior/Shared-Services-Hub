@@ -196,6 +196,30 @@ class TierEligibilityServiceTest {
         }
 
         @Test
+        @DisplayName("COMPLETED work awaiting verification also holds a slot")
+        void shouldCountCompletedWorkAwaitingVerification() {
+            when(applicationRepository.findByYouthAndStatusIn(youth, List.of(ApplicationStatus.PENDING)))
+                .thenReturn(List.of());
+            when(taskRepository.countByAssignedToAndStatus(youth, "IN_PROGRESS")).thenReturn(1L);
+            when(taskRepository.countByAssignedToAndStatus(youth, "COMPLETED")).thenReturn(1L);
+
+            assertThat(tierService.countActiveReservations(youth)).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("A COMPLETED task blocks a Tier 0 youth from applying elsewhere")
+        void shouldBlockTierZero_WhileWorkIsAwaitingVerification() {
+            when(experienceRepository.countByYouthAndIsVerifiedTrue(youth)).thenReturn(0L);
+            when(applicationRepository.findByYouthAndStatusIn(youth, List.of(ApplicationStatus.PENDING)))
+                .thenReturn(List.of());
+            when(taskRepository.countByAssignedToAndStatus(youth, "IN_PROGRESS")).thenReturn(0L);
+            when(taskRepository.countByAssignedToAndStatus(youth, "COMPLETED")).thenReturn(1L);
+
+            assertThatThrownBy(() -> tierService.assertCanApply(youth))
+                .isInstanceOf(TierEligibilityException.class);
+        }
+
+        @Test
         @DisplayName("The tier snapshot exposes the 48-hour window and current usage")
         void shouldExposeReservationWindowInTierInfo() {
             Application fresh = pendingApplication(NOW.plusHours(1));

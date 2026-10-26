@@ -67,7 +67,8 @@
 		portfolio: '',
 		bio: '',
 		location: '',
-		availability: ''
+		availability: '',
+		shareFeedbackPublicly: false
 	});
 
 	const isAlumni = $derived(Boolean(youthProfile?.isAlumni ?? youthProfile?.alumni));
@@ -437,7 +438,10 @@
 			portfolio: youthProfile?.portfolio || '',
 			bio: youthProfile?.bio || '',
 			location: youthProfile?.location || '',
-			availability: youthProfile?.availability || ''
+			availability: youthProfile?.availability || '',
+			shareFeedbackPublicly: Boolean(
+				youthProfile?.shareFeedbackPublicly ?? youthProfile?.isShareFeedbackPublicly ?? false
+			)
 		};
 		profileModalOpen = true;
 	}
@@ -451,7 +455,8 @@
 			portfolio: profileForm.portfolio.trim(),
 			bio: profileForm.bio.trim(),
 			location: profileForm.location.trim(),
-			availability: profileForm.availability.trim()
+			availability: profileForm.availability.trim(),
+			shareFeedbackPublicly: Boolean(profileForm.shareFeedbackPublicly)
 		};
 
 		try {
@@ -825,7 +830,7 @@
 								<div class="flex gap-2"><span class="font-mono text-[9px] uppercase tracking-wider text-[#6A84AC] w-20 shrink-0">Available</span><span>{youthProfile.availability}</span></div>
 							{/if}
 							{#if youthProfile?.portfolio}
-								<div class="flex gap-2"><span class="font-mono text-[9px] uppercase tracking-wider text-[#6A84AC] w-20 shrink-0">Portfolio</span><a href={youthProfile.portfolio} target="_blank" rel="noreferrer" class="text-[#1446A0] underline truncate">{youthProfile.portfolio}</a></div>
+								<div class="flex gap-2"><span class="font-mono text-[9px] uppercase tracking-wider text-[#6A84AC] w-20 shrink-0">Portfolio</span><a href={youthProfile.portfolio} target="_blank" rel="noreferrer" class="text-[#1446A0] underline truncate">{youthProfile.portfolio.startsWith('/') ? 'View demo portfolio' : youthProfile.portfolio}</a></div>
 							{/if}
 						</div>
 						{#if profileSkills.length > 0}
@@ -1039,6 +1044,25 @@
 		<div>
 			<label for="profileBio" class="block font-mono text-[10px] font-bold uppercase tracking-wider text-[#6A84AC]">Bio</label>
 			<textarea id="profileBio" rows="3" maxlength="1000" bind:value={profileForm.bio} placeholder="What should an SME know about how you work?" class="cape-input mt-1.5 block w-full px-3.5 py-2.5 text-sm"></textarea>
+		</div>
+		<div class="border border-[#C8D4E8] bg-[#F8F9FC] p-3">
+			<label class="flex items-start gap-3 cursor-pointer">
+				<input
+					type="checkbox"
+					class="mt-0.5 h-4 w-4 accent-[#1446A0]"
+					bind:checked={profileForm.shareFeedbackPublicly}
+				/>
+				<span>
+					<span class="block font-mono text-[10px] font-bold uppercase tracking-wider text-[#0D1B3E]">
+						Share my verified-work feedback on the public ledger
+					</span>
+					<span class="mt-0.5 block text-[11px] leading-relaxed text-[#465A7A] font-sans">
+						POPIA opt-in. Off (default): only you, your SMEs and funders can read your feedback
+						quotes. On: the anonymous public ledger may show the quote written when your work is
+						verified. The evidence reference stays protected either way.
+					</span>
+				</span>
+			</label>
 		</div>
 		<a href="/onboarding/skills" class="inline-block font-mono text-[10px] font-bold uppercase tracking-wider text-[#1446A0] hover:underline">
 			Prefer the guided skills check? Open it →

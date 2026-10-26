@@ -117,6 +117,7 @@ public class ExperienceService {
         response.setRating(experience.getRating());
         response.setReference(experience.getReference());
         response.setRejectionReason(experience.getRejectionReason());
+        response.setConfirmedSkills(splitSkills(experience.getConfirmedSkills()));
         response.setVerifiedAt(experience.getVerifiedAt());
         response.setCreatedAt(experience.getCreatedAt());
         response.setUpdatedAt(experience.getUpdatedAt());
@@ -135,5 +136,16 @@ public class ExperienceService {
         }
 
         return response;
+    }
+
+    private static java.util.List<String> splitSkills(String confirmedSkills) {
+        if (confirmedSkills == null || confirmedSkills.isBlank()) {
+            return List.of();
+        }
+        return List.of(confirmedSkills.split(","))
+            .stream()
+            .filter(skill -> skill != null && !skill.isBlank())
+            .map(String::trim)
+            .toList();
     }
 }

@@ -83,6 +83,15 @@ public class Experience {
     private Double rating;
 
     /**
+     * Skills the SME explicitly confirmed were demonstrated on this task,
+     * captured at verification. Sealed into the ledger hash (chain v2) and
+     * surfaced on the youth's verified record. Comma-separated; empty when
+     * the SME confirmed none.
+     */
+    @Column(name = "confirmed_skills", columnDefinition = "TEXT")
+    private String confirmedSkills;
+
+    /**
      * A concrete artefact or reference the SME checked when verifying
      * (for example a portfolio URL, delivery note number or file reference).
      * Required on verification.
@@ -255,23 +264,6 @@ public class Experience {
     // ============================================
 
     /**
-     * Marks this experience as verified by the SME.
-     * Sets verifiedAt and status, and stores the mandatory evidence reference.
-     */
-    public void verify(String feedback, Double rating, String reference) {
-        this.isVerified = true;
-        this.verifiedAt = LocalDateTime.now();
-        this.status = "VERIFIED";
-        this.feedback = feedback;
-        this.rating = rating;
-        this.reference = reference;
-        this.rejectionReason = null;
-        if (this.endDate == null) {
-            this.endDate = this.verifiedAt;
-        }
-    }
-
-    /**
      * Marks the experience as rejected and records the SME's revision reason.
      */
     public void reject(String reason) {
@@ -279,6 +271,43 @@ public class Experience {
         this.verifiedAt = null;
         this.status = "REJECTED";
         this.rejectionReason = reason;
+    }
+
+    public String getConfirmedSkills() {
+        return confirmedSkills;
+    }
+
+    public void setConfirmedSkills(String confirmedSkills) {
+        this.confirmedSkills = confirmedSkills;
+    }
+
+    /**
+     * Marks this experience as verified by the SME without skill confirmation.
+     * Scoring path kept for compatibility; callers confirming skills use {@link #verify(String, Double, String, String)}.
+     */
+    public void verify(String feedback, Double rating, String reference) {
+        verify(feedback, rating, reference, null);
+    }
+
+    /**
+     * Marks this experience as verified by the SME. Sets verifiedAt and
+     * status, stores the mandatory evidence reference and the comma-separated
+     * list of skills the SME confirmed were demonstrated.
+     */
+    public void verify(String feedback, Double rating, String reference, String confirmedSkills) {
+        this.isVerified = true;
+        this.verifiedAt = LocalDateTime.now();
+        this.status = "VERIFIED";
+        this.feedback = feedback;
+        this.rating = rating;
+        this.reference = reference;
+        this.confirmedSkills = (confirmedSkills == null || confirmedSkills.isBlank())
+            ? null
+            : confirmedSkills.trim();
+        this.rejectionReason = null;
+        if (this.endDate == null) {
+            this.endDate = this.verifiedAt;
+        }
     }
 
     /**
@@ -292,6 +321,7 @@ public class Experience {
         this.feedback = null;
         this.rating = null;
         this.reference = null;
+        this.confirmedSkills = null;
     }
 
     // ============================================

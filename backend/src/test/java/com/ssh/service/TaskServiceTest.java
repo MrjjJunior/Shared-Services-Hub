@@ -321,7 +321,10 @@ class TaskServiceTest {
             givenSaveReturnsTask();
 
             VerificationRequest request =
-                new VerificationRequest(5.0, "Excellent work", "https://portfolio.example.com/logo");
+                new VerificationRequest(
+                    5.0, "Excellent work", "https://portfolio.example.com/logo",
+                    java.util.List.of(
+                        "  Product tagging  ", " ", "Product tagging", "Photography"));
 
             VerificationResponse response =
                 taskService.verifyTask(task.getId(), request, OWNER_EMAIL);
@@ -332,6 +335,7 @@ class TaskServiceTest {
             assertThat(experience.getRating()).isEqualTo(5.0);
             assertThat(experience.getFeedback()).isEqualTo("Excellent work");
             assertThat(experience.getReference()).isEqualTo("https://portfolio.example.com/logo");
+            assertThat(experience.getConfirmedSkills()).isEqualTo("Product tagging, Photography");
             assertThat(response.task().getStatus()).isEqualTo("VERIFIED");
             assertThat(response.payment().totalAmount()).isEqualTo(1000.0);
             assertThat(response.payment().platformFee()).isEqualTo(100.0);
@@ -353,31 +357,31 @@ class TaskServiceTest {
         @Test
         @DisplayName("Given missing rating, When verifying, Then the request is rejected before any write")
         void shouldRejectVerification_WhenRatingIsMissing() {
-            assertInvalid(new VerificationRequest(null, "Great", "ref"));
+            assertInvalid(vr(null, "Great", "ref"));
         }
 
         @Test
         @DisplayName("Given a rating below 1, When verifying, Then the request is rejected")
         void shouldRejectVerification_WhenRatingIsTooLow() {
-            assertInvalid(new VerificationRequest(0.5, "Great", "ref"));
+            assertInvalid(vr(0.5, "Great", "ref"));
         }
 
         @Test
         @DisplayName("Given a rating above 5, When verifying, Then the request is rejected")
         void shouldRejectVerification_WhenRatingIsTooHigh() {
-            assertInvalid(new VerificationRequest(5.5, "Great", "ref"));
+            assertInvalid(vr(5.5, "Great", "ref"));
         }
 
         @Test
         @DisplayName("Given blank feedback, When verifying, Then the request is rejected")
         void shouldRejectVerification_WhenFeedbackIsBlank() {
-            assertInvalid(new VerificationRequest(4.0, "   ", "ref"));
+            assertInvalid(vr(4.0, "   ", "ref"));
         }
 
         @Test
         @DisplayName("Given a blank reference, When verifying, Then the request is rejected")
         void shouldRejectVerification_WhenReferenceIsBlank() {
-            assertInvalid(new VerificationRequest(4.0, "Great", ""));
+            assertInvalid(vr(4.0, "Great", ""));
         }
 
         @Test
@@ -581,6 +585,103 @@ class TaskServiceTest {
         }
     }
 
+    @Nested
+    @DisplayName("Cancel")
+    class Cancel {
+
+        @Test
+        @DisplayName("Given an OPEN task, When the owning SME cancels, Then it is CANCELLED and applications are released")
+        void shouldCancelOpenTask_AndReleaseApplications() {
+            givenSme(OWNER_EMAIL, ownerSme);
+            givenTask();
+            givenSaveReturnsTask();
+
+            TaskResponse response = taskService.cancelTask(
+                task.getId(), "Budget paused", OWNER_EMAIL);
+
+            assertThat(task.getStatus()).isEqualTo(TaskStatus.CANCELLED.name());
+            assertThat(response.getStatus()).isEqualTo("CANCELLED");
+            verify(applicationService).releasePendingApplications(task);
+            verify(applicationService, never()).accept(any(), any());
+
+            ArgumentCaptor<com.ssh.event.TaskCancelledEvent> eventCaptor =
+                ArgumentCaptor.forClass(com.ssh.event.TaskCancelledEvent.class);
+            verify(eventPublisher).publishEvent(eventCaptor.capture());
+            com.ssh.event.TaskCancelledEvent event = eventCaptor.getValue();
+            assertThat(event.taskId()).isEqualTo(task.getId());
+            assertThat(event.smeId()).isEqualTo(ownerSme.getId());
+            assertThat(event.youthId()).isNull();
+            assertThat(event.reason()).isEqualTo("Budget paused");
+        }
+
+        @Test
+        @DisplayName("Given an IN_PROGRESS task, When cancelled, Then the assigned youth is released too")
+        void shouldCancelInProgressTask_WithAssignedYouth() {
+            task.setStatus(TaskStatus.IN_PROGRESS.name());
+            task.setAssignedTo(youth);
+            givenSme(OWNER_EMAIL, ownerSme);
+            givenTask();
+            givenSaveReturnsTask();
+
+            TaskResponse response =
+                taskService.cancelTask(task.getId(), null, OWNER_EMAIL);
+
+            assertThat(task.getStatus()).isEqualTo(TaskStatus.CANCELLED.name());
+            assertThat(response.getStatus()).isEqualTo("CANCELLED");
+            verify(applicationService).releasePendingApplications(task);
+
+            ArgumentCaptor<com.ssh.event.TaskCancelledEvent> eventCaptor =
+                ArgumentCaptor.forClass(com.ssh.event.TaskCancelledEvent.class);
+            verify(eventPublisher).publishEvent(eventCaptor.capture());
+            assertThat(eventCaptor.getValue().youthId()).isEqualTo(youth.getId());
+            assertThat(eventCaptor.getValue().reason()).isEqualTo("Cancelled by the SME");
+        }
+
+        @Test
+        @DisplayName("Given a different SME, When cancelling, Then access is denied")
+        void shouldDenyCancel_WhenCallerDoesNotOwnTask() {
+            givenSme(OTHER_SME_EMAIL, otherSme);
+            givenTask();
+
+            assertThatThrownBy(() ->
+                taskService.cancelTask(task.getId(), "Rework", OTHER_SME_EMAIL))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("owns");
+
+            assertThat(task.getStatus()).isNotEqualTo(TaskStatus.CANCELLED.name());
+            verify(applicationService, never()).releasePendingApplications(any());
+            verify(eventPublisher, never()).publishEvent(any());
+        }
+
+        @Test
+        @DisplayName("Given a COMPLETED task, When cancelled, Then the transition is rejected")
+        void shouldRejectCancel_WhenTaskIsCompleted() {
+            task.setStatus(TaskStatus.COMPLETED.name());
+            task.setAssignedTo(youth);
+            givenSme(OWNER_EMAIL, ownerSme);
+            givenTask();
+
+            assertThatThrownBy(() ->
+                taskService.cancelTask(task.getId(), "Too late", OWNER_EMAIL))
+                .isInstanceOf(InvalidTaskTransitionException.class);
+
+            verify(applicationService, never()).releasePendingApplications(any());
+            verify(eventPublisher, never()).publishEvent(any());
+        }
+
+        @Test
+        @DisplayName("Given a VERIFIED task, When cancelled, Then the transition is rejected")
+        void shouldRejectCancel_WhenTaskIsVerified() {
+            task.setStatus(TaskStatus.VERIFIED.name());
+            givenSme(OWNER_EMAIL, ownerSme);
+            givenTask();
+
+            assertThatThrownBy(() ->
+                taskService.cancelTask(task.getId(), null, OWNER_EMAIL))
+                .isInstanceOf(InvalidTaskTransitionException.class);
+        }
+    }
+
     // ============================================
     // HELPERS
     // ============================================
@@ -620,8 +721,14 @@ class TaskServiceTest {
     }
 
     private static VerificationRequest validRequest() {
-        return new VerificationRequest(
-            5.0, "Excellent work", "https://portfolio.example.com/logo");
+        return vr(5.0, "Excellent work", "https://portfolio.example.com/logo");
+    }
+
+    /**
+     * Legacy 3-arg shape: skills optional so existing call sites stay compact.
+     */
+    private static VerificationRequest vr(Double rating, String feedback, String reference) {
+        return new VerificationRequest(rating, feedback, reference, null);
     }
 
     private ExperienceResponse experienceResponse() {

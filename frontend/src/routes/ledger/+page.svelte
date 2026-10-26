@@ -14,6 +14,21 @@
 	let chainResult = $state(null);
 	let proofs = $state({});
 
+	/**
+	 * Confirmed skills for display: the live API seals a comma-joined string
+	 * into the ledger entry, demo mode provides an array.
+	 */
+	function skillList(entry) {
+		if (Array.isArray(entry.confirmedSkills)) return entry.confirmedSkills;
+		if (typeof entry.confirmedSkills === 'string' && entry.confirmedSkills.trim()) {
+			return entry.confirmedSkills
+				.split(',')
+				.map((skill) => skill.trim())
+				.filter(Boolean);
+		}
+		return [];
+	}
+
 	const filteredEntries = $derived.by(() => {
 		const query = searchQuery.trim().toLowerCase();
 		const matches = query
@@ -225,6 +240,15 @@
 										<div class="mt-0.5 font-mono text-[10px] text-[#6A84AC]">Task #{entry.taskId} · Youth #{entry.youthId}</div>
 										{#if entry.feedback}
 											<p class="mt-1 max-w-md text-[11px] leading-relaxed text-[#465A7A] line-clamp-2">{entry.feedback}</p>
+										{:else}
+											<span class="mt-1 inline-block border border-[#C8D4E8] bg-[#F8F9FC] px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-[#6A84AC]">Protected · visible on request</span>
+										{/if}
+										{#if skillList(entry).length > 0}
+											<div class="mt-1.5 flex flex-wrap gap-1">
+												{#each skillList(entry) as skill}
+													<span class="border border-[#1A8A55]/40 bg-[#EDFBF3] px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-[#1A8A55]">{skill}</span>
+												{/each}
+											</div>
 										{/if}
 										{#if entry.reference}
 											<div class="mt-1 font-mono text-[9px] uppercase tracking-wider text-[#6A84AC]">Ref: {entry.reference}</div>
@@ -270,6 +294,15 @@
 							<div class="mt-1 font-mono text-[10px] text-[#6A84AC]">Task #{entry.taskId} · Youth #{entry.youthId} · {formatDate(entry.verifiedAt)}</div>
 							{#if entry.feedback}
 								<p class="mt-2 text-xs leading-relaxed text-[#465A7A]">{entry.feedback}</p>
+							{:else}
+								<span class="mt-2 inline-block border border-[#C8D4E8] bg-[#F8F9FC] px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-[#6A84AC]">Protected · visible on request</span>
+							{/if}
+							{#if skillList(entry).length > 0}
+								<div class="mt-2 flex flex-wrap gap-1">
+									{#each skillList(entry) as skill}
+										<span class="border border-[#1A8A55]/40 bg-[#EDFBF3] px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-[#1A8A55]">{skill}</span>
+									{/each}
+								</div>
 							{/if}
 							{#if entry.reference}
 								<div class="mt-2 font-mono text-[9px] uppercase tracking-wider text-[#6A84AC]">Ref: {entry.reference}</div>

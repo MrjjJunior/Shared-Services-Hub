@@ -109,12 +109,19 @@
 
 	function safeExternalUrl(value) {
 		if (!value) return null;
+		// Internal demo portfolio links (e.g. /portfolio/2 on the sign-in
+		// demo roster) pass through untouched so they stay on the site.
+		if (value.startsWith('/')) return value;
 		try {
 			const url = new URL(value, 'https://');
 			return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
 		} catch {
 			return null;
 		}
+	}
+
+	function isInternalPortfolio(value) {
+		return Boolean(value && value.startsWith('/'));
 	}
 </script>
 
@@ -383,7 +390,11 @@
 										rel="noreferrer"
 										class="mt-0.5 block truncate font-sans text-[11px] text-[#1446A0] underline"
 									>
-										{selectedApplicant.youthPortfolio}
+										{#if isInternalPortfolio(selectedApplicant.youthPortfolio)}
+											View demo portfolio
+										{:else}
+											{selectedApplicant.youthPortfolio}
+										{/if}
 									</a>
 								{:else}
 									<div class="mt-0.5 font-sans text-[11px] text-[#0D1B3E]">Not provided</div>

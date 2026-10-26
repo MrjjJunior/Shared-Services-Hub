@@ -15,6 +15,7 @@
 	let transactions = $state([]);
 	let ledgerEntries = $state([]);
 	let impactTasks = $state([]);
+	let impactMetrics = $state(null);
 	let loading = $state(true);
 	let errorMessage = $state(null);
 	let chainLoading = $state(false);
@@ -39,14 +40,21 @@
 
 	const debits = $derived(transactions.filter((tx) => tx.type === 'DEBIT'));
 	const credits = $derived(transactions.filter((tx) => tx.type === 'CREDIT'));
+	// Headline figures prefer the consolidated funder-impact endpoint (verified
+	// work only) and fall back to client-side derivations when the endpoint
+	// has not been wired yet.
 	const wagesDisbursed = $derived(
-		debits.reduce((sum, tx) => sum + Number(tx.amount || 0), 0)
+		impactMetrics?.totalDisbursed ?? debits.reduce((sum, tx) => sum + Number(tx.amount || 0), 0)
 	);
 	const fundingReceived = $derived(
-		credits.reduce((sum, tx) => sum + Number(tx.amount || 0), 0)
+		impactMetrics?.totalPledged ?? credits.reduce((sum, tx) => sum + Number(tx.amount || 0), 0)
 	);
-	const uniqueYouth = $derived(new Set(ledgerEntries.map((entry) => entry.youthId)).size);
-	const uniqueTasks = $derived(new Set(ledgerEntries.map((entry) => entry.taskId)).size);
+	const uniqueYouth = $derived(
+		impactMetrics?.youthImpacted ?? new Set(ledgerEntries.map((entry) => entry.youthId)).size
+	);
+	const uniqueTasks = $derived(
+		impactMetrics?.tasksDelivered ?? new Set(ledgerEntries.map((entry) => entry.taskId)).size
+	);
 	const uniqueSmes = $derived(
 		new Set(
 			ledgerEntries
@@ -55,6 +63,9 @@
 		).size
 	);
 	const averageRating = $derived.by(() => {
+		if (impactMetrics?.averageRating != null && Number(impactMetrics.averageRating) > 0) {
+			return String(impactMetrics.averageRating);
+		}
 		const rated = ledgerEntries.filter((entry) => entry.rating);
 		if (rated.length === 0) return '—';
 		return (
@@ -127,10 +138,11 @@
 	async function loadImpact() {
 		loading = true;
 		errorMessage = null;
-		const [walletResult, txResult, ledgerResult] = await Promise.allSettled([
+		const [walletResult, txResult, ledgerResult, impactResult] = await Promise.allSettled([
 			api.wallet.reserve(),
 			api.wallet.transactions(),
-			api.ledger.entries()
+			api.ledger.entries(),
+			api.corporate.impact()
 		]);
 
 		if (walletResult.status === 'fulfilled') {
@@ -151,6 +163,13 @@
 		} else {
 			console.error('Failed to load ledger entries:', ledgerResult.reason);
 			errorMessage = errorMessage || ledgerResult.reason?.message || 'Could not load ledger impact.';
+		}
+
+		if (impactResult.status === 'fulfilled') {
+			impactMetrics = impactResult.value || null;
+		} else {
+			console.error('Failed to load funder impact metrics:', impactResult.reason);
+			impactMetrics = null;
 		}
 
 		const taskIds = [

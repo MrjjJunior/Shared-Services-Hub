@@ -30,6 +30,9 @@
     <properties>
         <java.version>17</java.version>
         <jjwt.version>0.12.6</jjwt.version>
+        <!-- Pin a Lombok release that also builds on newer local JDKs (25/26/27):
+             older managed versions crash with EndPosTable under those compilers. -->
+        <lombok.version>1.18.48</lombok.version>
     </properties>
 
     <dependencies>

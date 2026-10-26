@@ -7,6 +7,7 @@ import com.ssh.service.LedgerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,21 +31,27 @@ public class LedgerController {
     }
 
     @GetMapping("/entries")
-    @Operation(summary = "List all public ledger entries (no authentication)")
-    public ResponseEntity<ApiResponse<List<LedgerEntryResponse>>> entries() {
+    @Operation(summary = "List all public ledger entries (no authentication)",
+        description = "Anonymous readers get the evidence reference withheld and the SME "
+            + "feedback only when the youth opted in. Signed-in readers get the full entry.")
+    public ResponseEntity<ApiResponse<List<LedgerEntryResponse>>> entries(
+        Authentication authentication) {
+        boolean includeProtectedFields = authentication != null && authentication.isAuthenticated();
         List<LedgerEntryResponse> entries = ledgerService.listEntries()
             .stream()
-            .map(LedgerEntryResponse::from)
+            .map(entry -> ledgerService.toShapedResponse(entry, includeProtectedFields))
             .toList();
         return ResponseEntity.ok(ApiResponse.success("Public ledger", entries));
     }
 
     @GetMapping("/entries/{id}")
     @Operation(summary = "Get one public ledger entry (no authentication)")
-    public ResponseEntity<ApiResponse<LedgerEntryResponse>> entry(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<LedgerEntryResponse>> entry(
+        @PathVariable Long id, Authentication authentication) {
+        boolean includeProtectedFields = authentication != null && authentication.isAuthenticated();
         return ResponseEntity.ok(ApiResponse.success(
             "Ledger entry",
-            LedgerEntryResponse.from(ledgerService.getEntry(id))));
+            ledgerService.toShapedResponse(ledgerService.getEntry(id), includeProtectedFields)));
     }
 
     @GetMapping("/verify")

@@ -31,6 +31,7 @@ class LedgerServiceTest {
     private static final LocalDateTime VERIFIED_AT = LocalDateTime.of(2026, 1, 1, 10, 0);
 
     @Mock private LedgerEntryRepository ledgerEntryRepository;
+    @Mock private com.ssh.repository.YouthRepository youthRepository;
 
     private LedgerService ledgerService;
     private Experience firstExperience;
@@ -39,7 +40,7 @@ class LedgerServiceTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(Instant.parse("2026-01-01T10:00:00Z"), ZoneOffset.UTC);
-        ledgerService = new LedgerService(ledgerEntryRepository, clock);
+        ledgerService = new LedgerService(ledgerEntryRepository, youthRepository, clock);
 
         firstExperience = experience(500L, 100L, 30L);
         secondExperience = experience(501L, 101L, 31L);
@@ -144,6 +145,46 @@ class LedgerServiceTest {
 
         assertThat(result.valid()).isTrue();
         assertThat(result.checkedEntries()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("A v2 entry seals the confirmed skills into the canonical payload")
+    void shouldSealConfirmedSkills_InV2Entry() {
+        when(ledgerEntryRepository.findByExperienceId(500L)).thenReturn(Optional.empty());
+        when(ledgerEntryRepository.findTopByOrderBySequenceDesc()).thenReturn(Optional.empty());
+        when(ledgerEntryRepository.save(any(LedgerEntry.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        firstExperience.setConfirmedSkills("Product tagging, Photography");
+        LedgerEntry entry = ledgerService.append(firstExperience);
+
+        assertThat(entry.getChainVersion()).isEqualTo(2);
+        assertThat(entry.getConfirmedSkills()).isEqualTo("Product tagging, Photography");
+        assertThat(entry.getHash()).isEqualTo(
+            LedgerService.sha256(LedgerService.canonical(entry)));
+
+        // Tampering with the sealed skills must invalidate the hash
+        entry.setConfirmedSkills("Product tagging");
+        assertThat(LedgerService.sha256(LedgerService.canonical(entry)))
+            .isNotEqualTo(entry.getHash());
+    }
+
+    @Test
+    @DisplayName("Legacy v1 entries keep their original canonical payload")
+    void shouldKeepV1CanonicalStable() {
+        LedgerEntry legacy = entry(1L, firstExperience, LedgerService.GENESIS_HASH);
+        String originalCanonical = LedgerService.canonical(legacy);
+
+        // Skills and a version suddenly appear on a legacy row: the canonical
+        // payload must not change, so the stored hash stays valid.
+        legacy.setConfirmedSkills("Never sealed");
+        legacy.setChainVersion(null);
+
+        assertThat(LedgerService.canonical(legacy)).isEqualTo(originalCanonical);
+        assertThat(legacy.getHash()).isNullOrEmpty();
+
+        legacy.setHash(LedgerService.sha256(LedgerService.canonical(legacy)));
+        assertThat(legacy.getPreviousHash()).isEqualTo(LedgerService.GENESIS_HASH);
     }
 
     private Experience experience(Long experienceId, Long taskId, Long youthId) {

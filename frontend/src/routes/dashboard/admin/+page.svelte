@@ -15,9 +15,11 @@
 	let tasks = $state([]);
 	let wallet = $state(null);
 	let transactions = $state([]);
+	let youthRoster = $state([]);
 	let loading = $state(true);
 	let errorMessage = $state(null);
 	let paymentFilter = $state('PENDING');
+	let markingYouthId = $state(null);
 
 	let payoutModalOpen = $state(false);
 	let selectedPaymentToPayout = $state(null);
@@ -109,13 +111,14 @@
 	async function loadAdmin() {
 		loading = true;
 		errorMessage = null;
-		const [paymentResult, ledgerResult, taskResult, walletResult, txResult] =
+		const [paymentResult, ledgerResult, taskResult, walletResult, txResult, youthResult] =
 			await Promise.allSettled([
 				api.payments.listAll(),
 				api.ledger.entries(),
 				api.tasks.list(),
 				api.wallet.reserve(),
-				api.wallet.transactions()
+				api.wallet.transactions(),
+				api.admin.youth()
 			]);
 
 		if (paymentResult.status === 'fulfilled') {
@@ -150,7 +153,29 @@
 			console.error('Failed to load reserve transactions:', txResult.reason);
 		}
 
+		if (youthResult.status === 'fulfilled') {
+			youthRoster = Array.isArray(youthResult.value) ? youthResult.value : [];
+		} else {
+			console.error('Failed to load youth roster:', youthResult.reason);
+		}
+
 		loading = false;
+	}
+
+	async function handleMarkPlaced(youth) {
+		if (!youth || youth.isAlumni) return;
+		markingYouthId = youth.id;
+		try {
+			const updated = await api.admin.markPlaced(youth.id);
+			youthRoster = youthRoster.map((row) =>
+				row.id === updated.id ? { ...row, ...updated } : row
+			);
+			toast.success(`${updated.userName || 'Youth'} marked as placed — welcome to the SSH Alumni.`);
+		} catch (err) {
+			toast.error(err.message || 'Could not mark the youth as placed.');
+		} finally {
+			markingYouthId = null;
+		}
 	}
 
 	function openPayoutModal(payment) {
@@ -357,6 +382,80 @@
 						<h3 class="font-serif text-lg text-[#0D1B3E] mb-1">SME Partner View</h3>
 						<p class="text-xs text-[#6A84AC] font-sans">Test task publishing, assignment flows, and experience verification.</p>
 					</a>
+				</div>
+
+				<!-- Youth outcomes: roster + mark placed -->
+				<div class="mt-6 border border-[#C8D4E8] bg-white shadow-xs">
+					<div class="border-b border-[#C8D4E8] p-5">
+						<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+							<div>
+								<div class="flex items-center gap-2">
+									<span class="h-1.5 w-1.5 bg-[#1A8A55]"></span>
+									<h2 class="font-serif text-2xl text-[#0D1B3E]">Youth Outcomes</h2>
+								</div>
+								<p class="mt-0.5 text-xs text-[#6A84AC] font-sans">
+									The hub roster. Once a youth has been permanently placed, mark them as an SSH Alumni —
+									the exit stamp keeps their verified history for impact reporting.
+								</p>
+							</div>
+							<div class="text-left sm:text-right">
+								<div class="font-mono text-[9px] uppercase tracking-wider text-[#6A84AC]">Placed alumni</div>
+								<div class="font-mono text-xl font-bold text-[#1A8A55]">
+									{youthRoster.filter((row) => row.isAlumni).length}/{youthRoster.length || '—'}
+								</div>
+							</div>
+						</div>
+					</div>
+
+					{#if youthRoster.length === 0}
+						<div class="p-5">
+							<StatePanel
+								kind="empty"
+								title="No youth registered yet"
+								message="The roster fills in as candidates complete registration and skills onboarding."
+								compact
+							/>
+						</div>
+					{:else}
+						<div class="divide-y divide-[#EFF4FF]">
+							{#each youthRoster as youth (youth.id)}
+								<div class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+									<div class="min-w-0">
+										<div class="flex flex-wrap items-center gap-2">
+											<span class="border px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider {youth.tier === 'TIER_3' ? 'border-[#7C3FE4] bg-[#F5EEFF] text-[#7C3FE4]' : youth.tier === 'TIER_2' ? 'border-[#1446A0] bg-[#EFF4FF] text-[#1446A0]' : youth.tier === 'TIER_1' ? 'border-[#D4831A] bg-[#FFFBF2] text-[#8A5A10]' : 'border-[#C8D4E8] bg-[#F8F9FC] text-[#6A84AC]'}">
+												{youth.tier || 'TIER_0'}
+											</span>
+											{#if youth.isAlumni}
+												<span class="border border-[#1A8A55] bg-[#EDFBF3] px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-[#1A8A55]">
+													Alumni {youth.alumniDate ? `since ${formatDate(youth.alumniDate)}` : ''}
+												</span>
+											{/if}
+										</div>
+										<h3 class="mt-1.5 font-serif text-base text-[#0D1B3E]">{youth.userName || `Youth #${youth.id}`}</h3>
+										<p class="font-mono text-[9px] uppercase tracking-wider text-[#6A84AC]">
+											{youth.verifiedExperiences} verified experience(s) in the ledger
+										</p>
+									</div>
+									<div class="shrink-0">
+										{#if youth.isAlumni}
+											<span class="inline-block border border-[#1A8A55] bg-[#EDFBF3] px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider text-[#1A8A55]">
+												✓ Placed
+											</span>
+										{:else}
+											<button
+												type="button"
+												class="border border-[#1A8A55] bg-[#EDFBF3] px-3.5 py-2 text-xs font-mono uppercase tracking-wider font-bold text-[#1A8A55] hover:bg-[#1A8A55] hover:text-white transition-colors disabled:opacity-50"
+												disabled={markingYouthId === youth.id}
+												onclick={() => handleMarkPlaced(youth)}
+											>
+												{markingYouthId === youth.id ? 'Saving...' : 'Mark placed'}
+											</button>
+										{/if}
+									</div>
+								</div>
+							{/each}
+						</div>
+					{/if}
 				</div>
 			</div>
 

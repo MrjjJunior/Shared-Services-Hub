@@ -52,6 +52,8 @@ public class YouthResponse {
 
     private LocalDateTime alumniDate;
 
+    private boolean shareFeedbackPublicly;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -153,6 +155,14 @@ public class YouthResponse {
     @JsonProperty("isAlumni")
     public void setAlumni(boolean alumni) {
         isAlumni = alumni;
+    }
+
+    public boolean isShareFeedbackPublicly() {
+        return shareFeedbackPublicly;
+    }
+
+    public void setShareFeedbackPublicly(boolean shareFeedbackPublicly) {
+        this.shareFeedbackPublicly = shareFeedbackPublicly;
     }
 
     public LocalDateTime getAlumniDate() {

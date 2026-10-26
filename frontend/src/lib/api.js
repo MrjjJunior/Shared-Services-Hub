@@ -15,19 +15,19 @@ const daysAgo = (days, hours = 0) =>
 const DEMO_APPLICANT_PROFILES = {
 	1: {
 		bio: 'Final-year accounting student in Cape Town. I like turning messy spreadsheets into clear decisions and I am available for short operational sprints.',
-		portfolio: 'https://thabo-portfolio.example.co.za'
+		portfolio: '/portfolio/1'
 	},
 	2: {
 		bio: 'Marketing graduate in Johannesburg with a strong eye for clean visuals and product storytelling. I have run content calendars for two local brands and enjoy turning a brief into posts that feel on-brand.',
-		portfolio: 'https://naledi-khumalo.example.co.za'
+		portfolio: '/portfolio/2'
 	},
 	3: {
 		bio: 'Matric graduate from Soweto building a track record in accurate data capture and stock counts. I work quickly through repetitive lists and double-check my own work.',
-		portfolio: ''
+		portfolio: '/portfolio/3'
 	},
 	4: {
 		bio: 'Visual designer in Durban focused on simple, usable brand and document systems. I work in Figma and Canva and like leaving teams with templates they can maintain.',
-		portfolio: 'https://lerato-maseko.example.co.za'
+		portfolio: '/portfolio/4'
 	}
 };
 
@@ -54,12 +54,13 @@ function getMockDb() {
 			userName: 'Thabo Mokoena',
 			education: 'BCom Accounting, CPUT',
 			skills: 'Excel, Bookkeeping, Customer Support, Data Entry',
-			portfolio: 'https://thabo-portfolio.example.co.za',
+			portfolio: '/portfolio/1',
 			bio: 'Final-year accounting student in Cape Town. I like turning messy spreadsheets into clear decisions and I am available for short operational sprints.',
 			location: 'Cape Town, Western Cape',
 			availability: 'Weekdays after 2pm · weekends',
 			isAlumni: false,
 			alumniDate: null,
+			shareFeedbackPublicly: true,
 			createdAt: daysAgo(90),
 			updatedAt: daysAgo(2)
 		},
@@ -898,6 +899,9 @@ function handleMockFallback(endpoint, method, body) {
 		['education', 'skills', 'portfolio', 'bio', 'location', 'availability'].forEach((field) => {
 			if (body && body[field] !== undefined) db.profile[field] = body[field];
 		});
+		if (body && body.shareFeedbackPublicly !== undefined) {
+			db.profile.shareFeedbackPublicly = Boolean(body.shareFeedbackPublicly);
+		}
 		db.profile.updatedAt = new Date().toISOString();
 		saveMockDb(db);
 		return db.profile;
@@ -973,6 +977,10 @@ function handleMockFallback(endpoint, method, body) {
 		exp.feedback = body.feedback;
 		exp.rating = Number(body.rating);
 		exp.reference = body.reference;
+		exp.confirmedSkills = Array.isArray(body?.confirmedSkills)
+			? body.confirmedSkills.filter((s) => s && s.trim()).map((s) => s.trim())
+			: [];
+		exp.chainVersion = 2;
 		exp.verifiedAt = new Date().toISOString();
 		exp.updatedAt = new Date().toISOString();
 
@@ -1022,6 +1030,132 @@ function handleMockFallback(endpoint, method, body) {
 		return task;
 	}
 
+	// TASKS: Cancel (owner SME; releases outstanding PENDING applications)
+	const taskCancelMatch = cleanPath.match(/^\/api\/v1\/tasks\/(\d+)\/cancel$/);
+	if (taskCancelMatch && method === 'PATCH') {
+		const id = Number(taskCancelMatch[1]);
+		const task = db.tasks.find((t) => t.id === id);
+		if (!task) throw new Error('Task not found');
+		if (task.status !== 'OPEN' && task.status !== 'IN_PROGRESS') {
+			throw new Error('Only an OPEN or IN_PROGRESS task can be cancelled');
+		}
+		task.status = 'CANCELLED';
+		task.updatedAt = new Date().toISOString();
+		if (!Array.isArray(db.applications)) db.applications = [];
+		db.applications
+			.filter((a) => a.taskId === id && a.status === 'PENDING')
+			.forEach((a) => {
+				a.status = 'REJECTED';
+				a.decidedAt = new Date().toISOString();
+			});
+		saveMockDb(db);
+		return task;
+	}
+
+	// ADMIN: Youth roster (verified tiers + alumni status)
+	if (cleanPath === '/api/v1/admin/youth' && method === 'GET') {
+		const tierFromVerified = (verified) =>
+			verified >= 5 ? 'TIER_3' : verified >= 3 ? 'TIER_2' : verified >= 1 ? 'TIER_1' : 'TIER_0';
+		const roster = [];
+		const totalVerified = Array.isArray(db.experiences)
+			? db.experiences.filter((e) => e.isVerified && Number(e.youthId) === 1).length
+			: 0;
+		roster.push({
+			id: Number(db.profile?.id) || 1,
+			userName: db.profile?.userName || 'Demo Youth',
+			tier: tierFromVerified(totalVerified),
+			verifiedExperiences: totalVerified,
+			isAlumni: Boolean(db.profile?.isAlumni),
+			alumniDate: db.profile?.alumniDate || null
+		});
+		// Demo applicants 2..4 (names known to the demo seed)
+		const applicantNames = { 2: 'Naledi Khumalo', 3: 'Sibusiso Mathonsi', 4: 'Lerato Maseko' };
+		Object.keys(applicantNames).forEach((key) => {
+			const youthId = Number(key);
+			const verified = Array.isArray(db.experiences)
+				? db.experiences.filter(
+						(e) => e.isVerified && Number(e.youthId) === youthId
+					).length
+				: 0;
+			roster.push({
+				id: youthId,
+				userName: applicantNames[key],
+				tier: tierFromVerified(verified),
+				verifiedExperiences: verified,
+				isAlumni: false,
+				alumniDate: null
+			});
+		});
+		return roster.sort((a, b) => Number(a.isAlumni) - Number(b.isAlumni) || a.id - b.id);
+	}
+
+	// ADMIN: Mark a youth as placed (alumni)
+	const adminYouthMatch = cleanPath.match(/^\/api\/v1\/admin\/youth\/(\d+)\/mark-placed$/);
+	if (adminYouthMatch && method === 'PATCH') {
+		const id = Number(adminYouthMatch[1]);
+		const alumniDate = new Date().toISOString();
+		if (id === Number(db.profile?.id)) {
+			db.profile.isAlumni = true;
+			if (!db.profile.alumniDate) db.profile.alumniDate = alumniDate;
+			db.profile.updatedAt = alumniDate;
+			saveMockDb(db);
+			return {
+				id,
+				userName: db.profile.userName,
+				tier: 'TIER_2',
+				verifiedExperiences: Array.isArray(db.experiences)
+					? db.experiences.filter((e) => e.isVerified).length
+					: 0,
+				isAlumni: true,
+				alumniDate: db.profile.alumniDate
+			};
+		}
+		const names = { 2: 'Naledi Khumalo', 3: 'Sibusiso Mathonsi', 4: 'Lerato Maseko' };
+		if (names[id]) {
+			const verified = Array.isArray(db.experiences)
+				? db.experiences.filter(
+						(e) => e.isVerified && Number(e.youthId) === id
+					).length
+				: 0;
+			const tier = verified >= 5 ? 'TIER_3' : verified >= 3 ? 'TIER_2' : verified >= 1 ? 'TIER_1' : 'TIER_0';
+			return { id, userName: names[id], tier, verifiedExperiences: verified, isAlumni: true, alumniDate };
+		}
+		throw new Error('Youth not found');
+	}
+
+	// CORPORATE: Consolidated funder impact report
+	if (cleanPath === '/api/v1/corporate/impact' && method === 'GET') {
+		if (!db.wallet) {
+			db.wallet = { id: 1, name: 'Corporate ESD Reserve', balance: 100000, currency: 'ZAR' };
+		}
+		const transactions = db.walletTransactions || [];
+		const totalPledged = transactions
+			.filter((t) => t.type === 'CREDIT')
+			.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+		const paid = db.payments.filter((p) => p.status === 'PAID');
+		const pending = db.payments.filter(
+			(p) => p.status === 'PENDING' || p.status === 'PROCESSING'
+		);
+		const round2 = (v) => Math.round(v * 100) / 100;
+		const verifiedExps = db.experiences.filter((e) => e.isVerified);
+		const ratings = verifiedExps.map((e) => Number(e.rating)).filter((r) => !Number.isNaN(r) && r > 0);
+		return {
+			reserveBalance: Number(db.wallet.balance),
+			totalPledged: round2(totalPledged || 100000),
+			totalDisbursed: round2(paid.reduce((sum, p) => sum + Number(p.youthAmount || 0), 0)),
+			platformFees: round2(paid.reduce((sum, p) => sum + Number(p.platformFee || 0), 0)),
+			pendingPayoutCount: pending.length,
+			pendingPayoutValue: round2(pending.reduce((sum, p) => sum + Number(p.youthAmount || 0), 0)),
+			youthImpacted: new Set(paid.map((p) => p.youthId)).size,
+			verifiedExperiences: verifiedExps.length,
+			ledgerSeals: verifiedExps.length,
+			tasksDelivered: db.tasks.filter((t) => t.status === 'VERIFIED').length,
+			averageRating: ratings.length
+				? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10
+				: 0
+		};
+	}
+
 	// EXPERIENCES: List for youth
 	const expYouthMatch = cleanPath.match(/^\/api\/v1\/experiences\/youth\/(\d+)$/);
 	if (expYouthMatch && method === 'GET') {
@@ -1054,6 +1188,10 @@ function handleMockFallback(endpoint, method, body) {
 		exp.feedback = feedback;
 		exp.rating = rating;
 		exp.reference = reference;
+		exp.confirmedSkills = Array.isArray(body?.confirmedSkills)
+			? body.confirmedSkills.filter((s) => s && s.trim()).map((s) => s.trim())
+			: [];
+		exp.chainVersion = 2;
 		exp.verifiedAt = new Date().toISOString();
 		exp.updatedAt = new Date().toISOString();
 
@@ -1154,19 +1292,27 @@ function handleMockFallback(endpoint, method, body) {
 	if (cleanPath === '/api/v1/ledger/entries' && method === 'GET') {
 		return db.experiences
 			.filter((e) => e.isVerified)
-			.map((e, index) => ({
-				id: index + 1,
-				sequence: index + 1,
-				experienceId: e.id,
-				taskId: e.taskId,
-				youthId: e.youthId,
-				rating: e.rating,
-				feedback: e.feedback,
-				reference: e.reference,
-				verifiedAt: e.verifiedAt,
-				previousHash: index === 0 ? 'GENESIS' : 'demo-hash-' + index,
-				hash: 'demo-hash-' + (index + 1)
-			}));
+			.map((e, index) => {
+				// POPIA whitelist: a reference is operational evidence and is
+				// never published anonymously; the feedback quote shows only
+				// when the youth opted in (demo Thabo has opted in).
+				const feedbackShared = Number(e.youthId) === 1 && (db.profile?.shareFeedbackPublicly ?? false);
+				return {
+					id: index + 1,
+					sequence: index + 1,
+					experienceId: e.id,
+					taskId: e.taskId,
+					youthId: e.youthId,
+					rating: e.rating,
+					feedback: feedbackShared ? e.feedback : null,
+					reference: null,
+					confirmedSkills: Array.isArray(e.confirmedSkills) ? e.confirmedSkills : [],
+					chainVersion: 2,
+					verifiedAt: e.verifiedAt,
+					previousHash: index === 0 ? 'GENESIS' : 'demo-hash-' + index,
+					hash: 'demo-hash-' + (index + 1)
+				};
+			});
 	}
 
 	// LEDGER: Verify chain
@@ -1318,13 +1464,15 @@ export const api = {
 		assign: (id, youthId) =>
 			api.patch(`/api/v1/tasks/${id}/assign?youthId=${encodeURIComponent(youthId)}`),
 		complete: (id) => api.patch(`/api/v1/tasks/${id}/complete`),
-		verify: (id, feedback, rating, reference) =>
+		verify: (id, feedback, rating, reference, confirmedSkills = []) =>
 			api.patch(`/api/v1/tasks/${id}/verify`, {
 				feedback,
 				rating: Number(rating),
-				reference
+				reference,
+				confirmedSkills
 			}),
-		reject: (id, reason) => api.patch(`/api/v1/tasks/${id}/reject`, { reason })
+		reject: (id, reason) => api.patch(`/api/v1/tasks/${id}/reject`, { reason }),
+		cancel: (id, reason = '') => api.patch(`/api/v1/tasks/${id}/cancel`, { reason })
 	},
 	applications: {
 		apply: (taskId, coverNote = '') =>
@@ -1343,12 +1491,20 @@ export const api = {
 	experiences: {
 		get: (id) => api.get(`/api/v1/experiences/${id}`),
 		listForYouth: (youthId) => api.get(`/api/v1/experiences/youth/${youthId}`),
-		verify: (id, feedback, rating, reference) =>
+		verify: (id, feedback, rating, reference, confirmedSkills = []) =>
 			api.patch(`/api/v1/experiences/${id}/verify`, {
 				feedback,
 				rating: Number(rating),
-				reference
+				reference,
+				confirmedSkills
 			})
+	},
+	admin: {
+		youth: () => api.get('/api/v1/admin/youth'),
+		markPlaced: (id) => api.patch(`/api/v1/admin/youth/${id}/mark-placed`)
+	},
+	corporate: {
+		impact: () => api.get('/api/v1/corporate/impact')
 	},
 	payments: {
 		mine: () => api.get('/api/v1/payments/mine'),

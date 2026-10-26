@@ -26,6 +26,13 @@ public class YouthProfileRequest {
     @Size(max = 50)
     private String availability;
 
+    /**
+     * POPIA opt-in: share the youth's verified-work feedback on the anonymous
+     * public ledger. Defaults to false — feedback stays protected until the
+     * youth explicitly opts in.
+     */
+    private Boolean shareFeedbackPublicly;
+
     public YouthProfileRequest() {
     }
 
@@ -80,6 +87,14 @@ public class YouthProfileRequest {
 
     public void setAvailability(String availability) {
         this.availability = availability;
+    }
+
+    public Boolean getShareFeedbackPublicly() {
+        return shareFeedbackPublicly;
+    }
+
+    public void setShareFeedbackPublicly(Boolean shareFeedbackPublicly) {
+        this.shareFeedbackPublicly = shareFeedbackPublicly;
     }
 
     @Override

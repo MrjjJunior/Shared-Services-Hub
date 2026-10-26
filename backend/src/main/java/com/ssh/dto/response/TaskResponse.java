@@ -60,6 +60,12 @@ public class TaskResponse {
 
     private int revisionCount;
 
+    /**
+     * The assigned youth's self-declared skills, so the SME can pick which
+     * ones to confirm during verification (sealing them into the ledger).
+     */
+    private java.util.List<String> assignedYouthSkills;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -200,6 +206,14 @@ public class TaskResponse {
 
     public void setRevisionCount(int revisionCount) {
         this.revisionCount = revisionCount;
+    }
+
+    public java.util.List<String> getAssignedYouthSkills() {
+        return assignedYouthSkills;
+    }
+
+    public void setAssignedYouthSkills(java.util.List<String> assignedYouthSkills) {
+        this.assignedYouthSkills = assignedYouthSkills;
     }
 
     public LocalDateTime getCreatedAt() {

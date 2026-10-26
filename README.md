@@ -46,16 +46,17 @@ The promise: "You will not leave this platform without a verified work record an
 
 ## The Problem
 
-South Africa has 4.7 million unemployed youth (45.8% unemployment rate). Youth programs exist, but alumni fall through
-the cracks after completion. They have skills but no verified work experience. SMEs need capacity but can't afford
-permanent hires. Corporates need B-BBEE compliance proof but lack verifiable data.
+South Africa has 4.7 million unemployed young people aged 15–34 (a 45.8% youth unemployment rate per the Stats SA
+Quarterly Labour Force Survey). Youth programs exist, but alumni fall through the cracks after completion. They have
+skills but no verified work experience. SMEs need capacity but can't afford permanent hires. Corporates need B-BBEE
+compliance proof but lack verifiable data.
 
 Nobody is connecting these groups effectively.
 
 ## The Solution
 
-SSH connects youth program alumni to SMEs for paid tasks. Corporates fund the youth's income, SMEs access talent for
-free, and SSH pays youth directly—eliminating exploitation and ensuring fair compensation.
+SSH connects youth program alumni to SMEs for paid tasks. Corporates fund the youth's income, SMEs post tasks with
+no posting fees, and SSH pays youth directly—eliminating exploitation and ensuring fair compensation.
 
 Every completed task is verified by the SME and recorded in the Experience Ledger, building a portable, verifiable work
 record that proves capability. Youth remain active in the hub until they secure permanent employment, at which point
@@ -67,7 +68,7 @@ they become SSH alumni.
 |------|------------------------------------------------------|
 | 1    | Corporate funds a cohort of youth                    |
 | 2    | Youth enters the Shared Services Hub                 |
-| 3    | SME posts a task (free)                              |
+| 3    | SME posts a task (no posting fees)                   |
 | 4    | Youth applies and completes the task                 |
 | 5    | SME verifies completion                              |
 | 6    | SSH pays the youth directly (from corporate funding) |
@@ -266,6 +267,21 @@ The frontend will start on http://localhost:5173.
 | Frontend    | http://localhost:5173                 |
 | Backend API | http://localhost:8080                 |
 | Swagger UI  | http://localhost:8080/swagger-ui.html |
+
+### 6. Demo Accounts
+
+The backend seeds four demo accounts on startup (password `password123` for all; `ssh.seed-demo-data=false` disables this):
+
+| Role      | Email                        |
+|-----------|------------------------------|
+| YOUTH     | thabo@example.com            |
+| SME       | sme@craftworks.co.za         |
+| CORPORATE | corporate@standardbank.co.za |
+| ADMIN     | admin@ssh.org.za             |
+
+On the sign-in screen, the **Quick Account Switcher** buttons sign you in with these accounts in one click using the in-browser sample database (demo mode). In live mode, the same emails work after backend startup against a database that lets seeding run (default on).
+
+Each demo youth also has a working portfolio page: `/portfolio/1` (Thabo), `/portfolio/2` (Naledi), `/portfolio/3` (Sibusiso), `/portfolio/4` (Lerato) — these are the links used across the demo surfaces (SME applicant review, youth dashboard).
 
 ## API Documentation
 

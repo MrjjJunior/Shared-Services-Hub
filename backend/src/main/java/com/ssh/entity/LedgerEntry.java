@@ -52,6 +52,21 @@ public class LedgerEntry {
     @Column(name = "previous_hash", nullable = false, length = 64)
     private String previousHash;
 
+    /**
+     * Canonical-payload version this entry was hashed with.
+     * Legacy (v1) entries hash the original nine fields; v2 entries also seal
+     * the SME-confirmed skills. Null means v1 (rows written before the skills
+     * field existed) so re-walking older chains stays stable.
+     */
+    @Column(name = "chain_version")
+    private Integer chainVersion;
+
+    /**
+     * Comma-separated skills the SME confirmed at verification (v2 payloads).
+     */
+    @Column(name = "confirmed_skills", length = 500)
+    private String confirmedSkills;
+
     @Column(nullable = false, length = 64)
     private String hash;
 
@@ -71,6 +86,17 @@ public class LedgerEntry {
     public LedgerEntry(Long sequence, Long experienceId, Long taskId, Long youthId,
                        Double rating, String feedback, String reference,
                        LocalDateTime verifiedAt, String previousHash) {
+        this(sequence, experienceId, taskId, youthId, rating, feedback, reference,
+            verifiedAt, previousHash, null, 1);
+    }
+
+    /**
+     * v2 constructor: seals the SME-confirmed skills into the canonical payload.
+     */
+    public LedgerEntry(Long sequence, Long experienceId, Long taskId, Long youthId,
+                       Double rating, String feedback, String reference,
+                       LocalDateTime verifiedAt, String previousHash,
+                       String confirmedSkills, Integer chainVersion) {
         this.sequence = sequence;
         this.experienceId = experienceId;
         this.taskId = taskId;
@@ -80,6 +106,8 @@ public class LedgerEntry {
         this.reference = reference;
         this.verifiedAt = verifiedAt;
         this.previousHash = previousHash;
+        this.confirmedSkills = confirmedSkills;
+        this.chainVersion = chainVersion;
     }
 
     public Long getId() {
@@ -140,6 +168,22 @@ public class LedgerEntry {
 
     public String getReference() {
         return reference;
+    }
+
+    public String getConfirmedSkills() {
+        return confirmedSkills;
+    }
+
+    public void setConfirmedSkills(String confirmedSkills) {
+        this.confirmedSkills = confirmedSkills;
+    }
+
+    public Integer getChainVersion() {
+        return chainVersion;
+    }
+
+    public void setChainVersion(Integer chainVersion) {
+        this.chainVersion = chainVersion;
     }
 
     public void setReference(String reference) {

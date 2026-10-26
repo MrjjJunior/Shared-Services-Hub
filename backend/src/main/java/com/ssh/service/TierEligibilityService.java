@@ -108,7 +108,9 @@ public class TierEligibilityService {
     /**
      * Non-expired PENDING applications plus IN_PROGRESS tasks. ACCEPTED
      * applications are represented by their IN_PROGRESS task, so counting
-     * both would double reserve the same slot.
+     * both would double reserve the same slot. COMPLETED work awaiting SME
+     * verification also reserves the youth's time (the task may still be
+     * sent back for revision), so it counts as active too.
      */
     @Transactional
     public long countActiveReservations(Youth youth) {
@@ -120,7 +122,9 @@ public class TierEligibilityService {
             .count();
         long inProgress = taskRepository
             .countByAssignedToAndStatus(youth, "IN_PROGRESS");
-        return pending + inProgress;
+        long awaitingVerification = taskRepository
+            .countByAssignedToAndStatus(youth, "COMPLETED");
+        return pending + inProgress + awaitingVerification;
     }
 
     /**

@@ -1,6 +1,7 @@
 <script>
 	import { api } from '$lib/api.js';
 	import { auth, isAuthenticated, currentUser, getRoleDashboard } from '$lib/stores/auth.js';
+	import { demoMode } from '$lib/stores/preferences.js';
 	import { toast } from '$lib/stores/toast.js';
 	import ApiError from '$lib/components/ApiError.svelte';
 	import { goto } from '$app/navigation';
@@ -52,6 +53,28 @@
 		} else if (demoRole === 'ADMIN') {
 			email = 'admin@ssh.org.za';
 			password = 'password123';
+		}
+	}
+
+	/**
+	 * One-click demo sign-in: enables the in-browser sample database, fills the
+	 * credentials for the picked role and authenticates immediately. The live
+	 * form is untouched for real accounts.
+	 */
+	async function signInAsDemo(demoRole) {
+		fillDemoCredentials(demoRole);
+		if (!email || !password) return;
+		demoMode.set(true);
+		loading = true;
+		errorMessage = null;
+		try {
+			const res = await api.auth.login({ email, password });
+			toast.success(`Signed in as demo ${demoRole.toLowerCase()} account`);
+			auth.login(res, true);
+		} catch (err) {
+			errorMessage = err.message || 'Demo sign-in failed. Please try again.';
+		} finally {
+			loading = false;
 		}
 	}
 </script>
@@ -145,7 +168,7 @@
 					<button
 						type="button"
 						class="border border-[#C8D4E8] bg-[#F8F9FC] p-2.5 text-left hover:border-[#1446A0] hover:bg-white transition-colors"
-						onclick={() => fillDemoCredentials('YOUTH')}
+						onclick={() => signInAsDemo('YOUTH')}
 					>
 						<span class="block font-mono text-[11px] font-bold text-[#1446A0]">YOUTH</span>
 						<span class="text-[11px] text-[#6A84AC]">Thabo Mokoena</span>
@@ -154,7 +177,7 @@
 					<button
 						type="button"
 						class="border border-[#C8D4E8] bg-[#F8F9FC] p-2.5 text-left hover:border-[#D4831A] hover:bg-white transition-colors"
-						onclick={() => fillDemoCredentials('SME')}
+						onclick={() => signInAsDemo('SME')}
 					>
 						<span class="block font-mono text-[11px] font-bold text-[#D4831A]">SME</span>
 						<span class="text-[11px] text-[#6A84AC]">Kasi Craftworks</span>
@@ -163,7 +186,7 @@
 					<button
 						type="button"
 						class="border border-[#C8D4E8] bg-[#F8F9FC] p-2.5 text-left hover:border-[#1A8A55] hover:bg-white transition-colors"
-						onclick={() => fillDemoCredentials('CORPORATE')}
+						onclick={() => signInAsDemo('CORPORATE')}
 					>
 						<span class="block font-mono text-[11px] font-bold text-[#1A8A55]">CORPORATE</span>
 						<span class="text-[11px] text-[#6A84AC]">Standard Bank</span>
@@ -172,12 +195,15 @@
 					<button
 						type="button"
 						class="border border-[#C8D4E8] bg-[#F8F9FC] p-2.5 text-left hover:border-[#7C3FE4] hover:bg-white transition-colors"
-						onclick={() => fillDemoCredentials('ADMIN')}
+						onclick={() => signInAsDemo('ADMIN')}
 					>
 						<span class="block font-mono text-[11px] font-bold text-[#7C3FE4]">ADMIN</span>
 						<span class="text-[11px] text-[#6A84AC]">Platform Admin</span>
 					</button>
 				</div>
+				<p class="mt-2 font-sans text-[10px] text-center text-[#6A84AC]">
+					Click a role to sign in instantly with the sample-database demo account (demo mode). The form above signs into the live API.
+				</p>
 			</div>
 		</div>
 	</div>
